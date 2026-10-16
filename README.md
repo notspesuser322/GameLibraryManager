@@ -8,8 +8,8 @@ Proyecto propio, pensado para uso personal y privado. Funciona **sin dependencia
 externas**: solo necesita Node.js. No hay cuentas, ni nube, ni telemetría.
 
 ```
-Nebula-1.2.0-instalador.exe  →  doble clic; se instala y abre Nébula en su ventana
-Nebula-1.2.0-portable.zip    →  descomprimir y abrir Nebula.exe
+Nebula-1.3.0-instalador.exe  →  doble clic; se instala y abre Nébula en su ventana
+Nebula-1.3.0-portable.zip    →  descomprimir y abrir Nebula.exe
 npm start                    →  http://localhost:4337 (ejecutándolo desde el código)
 ```
 
@@ -43,9 +43,16 @@ npm start                    →  http://localhost:4337 (ejecutándolo desde el 
 
 Nébula se comporta como un programa de escritorio: abre **su propia ventana**, sin barra de
 direcciones ni pestañas, con su icono en la barra de tareas, y se cierra al cerrar esa ventana.
-Por dentro usa ese navegador en «modo aplicación» (`--app=`), así que la ventana es nativa, rápida
-y no hay que instalar ni Electron ni nada parecido. La dirección `http://localhost:4337` sigue
-disponible si quieres abrirlo también en el navegador o desde el celular.
+El ejecutable de Windows está marcado como **programa de ventana**: no abre ninguna consola, ni
+deja procesos sueltos corriendo por detrás (al cerrar la ventana, el programa termina). Por dentro
+usa el navegador ya instalado en «modo aplicación» (`--app=`), así que la ventana es nativa, rápida
+y no hay que instalar ni Electron ni nada parecido; el paso siguiente, si hace falta, sería una
+ventana propia con WebView2. La dirección `http://localhost:4337` sigue disponible si quieres
+abrirlo también en el navegador o desde el celular.
+
+Nada de lo que hace el programa se ve por consola, así que todo queda anotado en
+`%APPDATA%\Nebula\Nebula.log`: ahí está el arranque, los análisis de carpetas, las fichas y
+carátulas descargadas y el motivo exacto de cualquier error.
 
 ## Puesta en marcha
 
@@ -72,9 +79,10 @@ En los dos casos los datos van a `%APPDATA%\Nebula` (no junto al programa) y se 
 reinstalas o desinstalas. Se abre la ventana de la aplicación en `http://localhost:4337`, y desde
 la terminal sirve el mismo ejecutable: `Nebula.exe --port 4400 --demo`.
 
-El instalador crea los accesos directos apuntando a un lanzador oculto (`Nebula.vbs`), de modo que
-al abrir Nébula desde el menú Inicio o el escritorio **no aparece la ventana negra de la consola**:
-se abre directamente la ventana de la aplicación.
+El instalador crea los accesos directos apuntando al propio `Nebula.exe` (con su icono), de modo
+que al abrir Nébula desde el menú Inicio o el escritorio **no aparece ninguna ventana de consola**:
+se abre directamente la ventana de la aplicación. En la carpeta de instalación no queda ningún
+archivo intermedio: ni lanzadores `.bat`, ni `.cmd`, ni `.vbs`.
 
 ### Publicación automática (una sola vez)
 
@@ -130,6 +138,10 @@ npm install --no-save esbuild postject resedit
 node scripts/fetch-node-win.mjs
 node scripts/build-sea.mjs --modo portable  --runtime dist/node-win/package/bin/node.exe --out dist/Nebula.exe
 node scripts/build-sea.mjs --modo instalador --runtime dist/node-win/package/bin/node.exe --out dist/Nebula-Instalador.exe
+
+Al final, la propia compilación comprueba que el ejecutable sirve: que la aplicación está dentro
+(el blob completo), que el interruptor de arranque quedó encendido y que el archivo está marcado
+como **programa de ventana** (`scripts/pe-subsystem.mjs`). Si algo de eso falla, no se publica.
 ```
 
 El resultado es un único archivo con el servidor, la interfaz y la documentación dentro. Al
@@ -308,7 +320,7 @@ En Windows: `set NEBULA_CONSOLE=ascii` antes de abrir el programa.
   activada la opción *Descargar carátulas de las tiendas*, se pide la imagen al CDN de Steam y se
   guarda en caché local; y si usas la pestaña *Metadatos*, se consulta Wikipedia, Wikidata o
   Steam con el nombre del juego. Ambas se pueden desactivar y todo se resuelve con tus datos.
-- En el ejecutable, los datos viven en `%APPDATA%\Nébula` (o `~/.local/share/nebula` en
+- En el ejecutable, los datos viven en `%APPDATA%\Nebula` (o `~/.local/share/nebula` en
   Linux, `~/Library/Application Support/Nébula` en macOS). Desde el código, en `data/`.
 - Exporta e importa toda la biblioteca en JSON desde **Ajustes → Datos**.
 - El servidor escucha en `0.0.0.0`, así que cualquiera en tu red local puede abrir la interfaz
@@ -359,6 +371,7 @@ server/
   index.js     servidor HTTP, API y archivos estáticos
   assets.js    rutas de la app: funcionan igual desde el código y dentro del ejecutable
   console.js   salida por consola legible en cualquier codificación (Windows incluido)
+  registro.js  registro en archivo (Nebula.log): el programa no tiene consola donde contar nada
   install.js   instalación y desinstalación en Windows (accesos directos, registro)
   desktop.js   ventana propia de la aplicación (Chrome/Edge en modo aplicación, WebView en Windows)
   http.js      cabeceras de las peticiones a las fuentes externas (agente e imagen de referencia)
@@ -376,9 +389,11 @@ public/
   index.html   estructura de la interfaz
   styles.css   tema oscuro con acento configurable
   js/          app, estado, componentes, vistas (biblioteca, ficha, actividad, estadísticas, buscar, ajustes)
-test/          82 pruebas: almacén, detección, lanzador, arte, metadatos, consola, instalación y API
+test/          pruebas: almacén, detección, lanzador, arte, metadatos, registro, instalación y API
 scripts/
   build-sea.mjs     construye los ejecutables (portable e instalador) con Node + esbuild + postject
+  pe-subsystem.mjs  marca el ejecutable como programa de ventana (sin la ventana de consola)
+  brand-exe.mjs     pone el icono y los datos del programa dentro del ejecutable
   installer-main.js arranque del instalador: instala, abre el programa o desinstala
   fetch-node-win.mjs  trae el node.exe oficial de Windows desde el registro de npm
   build-dist.mjs    prepara la carpeta distribuible con el servidor empaquetado
@@ -404,11 +419,12 @@ metadatos usan respuestas simuladas de las fuentes, así que funcionan sin conex
 comprueban el análisis de cada proveedor, el orden por parecido, el respaldo entre idiomas, la
 tolerancia a fuentes caídas y la regla de "no pisar lo que ya escribiste". Otras ocho
 comprueban que la salida por consola queda legible incluso cuando la consola usa una
-codificación antigua, nueve cubren la instalación en Windows (rutas, accesos directos con el
-lanzador sin consola, registro y detección de "ya instalado"), trece comprueban la descarga de
-carátulas contra fuentes simuladas (imagen válida, HTML con respuesta 200, 404, tiempo agotado,
-respaldo entre direcciones) y ocho el modo ventana (detección de navegador, argumentos de la
-ventana, apertura, cierre del programa al cerrar la ventana y `--keep-alive`).
+codificación antigua, ocho cubren la instalación en Windows (rutas, accesos directos al propio
+ejecutable, registro, borrado por lotes y detección de "ya instalado"), trece comprueban la
+descarga de carátulas contra fuentes simuladas (imagen válida, HTML con respuesta 200, 404,
+tiempo agotado, respaldo entre direcciones), ocho el modo ventana (detección de navegador,
+argumentos de la ventana, apertura, cierre del programa al cerrar la ventana y `--keep-alive`),
+cinco la marca de programa de ventana del ejecutable y cinco el registro en archivo.
 
 ## Limitaciones conocidas
 
@@ -424,3 +440,16 @@ ventana, apertura, cierre del programa al cerrar la ventana y `--keep-alive`).
 - La carátula descargada depende de que la fuente tenga imagen del juego: si ninguna la tiene, se
   queda la carátula generada (que siempre existe) y siempre puedes subir una tuya arrastrándola
   sobre la tarjeta.
+
+## Créditos
+
+- **La idea original es de [Playnite](https://playnite.link)** (https://github.com/JosefNemec/Playnite),
+  el gestor de biblioteca de juegos libre para Windows: una sola lista con todos tus juegos, su
+  ficha, su carátula y sus horas, con la ventana de la aplicación como única interfaz. Nébula es
+  una versión propia en español, pensada para juegos que ya tienes instalados en carpetas tuyas
+  (sin integraciones de tiendas), y no tendría sentido sin ese precedente. Todo el mérito de la
+  idea y de su manera de enseñar la biblioteca es de sus autores y colaboradores.
+- El ejecutable único usa el mecanismo oficial de Node (**SEA**), con `esbuild` y `postject`;
+  el icono y los datos del programa se escriben con `resedit`.
+- Las carátulas y las fichas salen de fuentes abiertas: **Wikipedia**, **Wikidata**, **Steam** y,
+  si se configura una clave, **RAWG**.

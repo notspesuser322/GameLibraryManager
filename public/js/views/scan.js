@@ -475,6 +475,7 @@ export function openFolderWizard({ path: initialPath = '' } = {}) {
             <span class="panel-note">${esc(hint)}</span>
           </label>`).join('')}
       </div>
+      <p class="tiny muted mt">Esta carpeta queda guardada y Nébula la revisa sola cada vez que abres el programa.</p>
       <div class="inline-actions mt">
         <label class="switch"><input type="checkbox" data-opt-size><span class="txt"><b>Calcular tamaño en disco</b><span>puede tardar en carpetas grandes</span></span></label>
         <label class="switch"><input type="checkbox" data-opt-deep checked><span class="txt"><b>Búsqueda profunda</b><span>revisa subcarpetas</span></span></label>
@@ -486,6 +487,25 @@ export function openFolderWizard({ path: initialPath = '' } = {}) {
     ]);
   }
 
+  /* Una carpeta analizada desde aquí queda registrada: Nébula la revisa sola en
+     cada arranque y descubre los juegos que se instalen después. */
+  async function guardarCarpeta(deep) {
+    const normalizar = (valor) => String(valor || '').replace(/[\\/]+$/, '').toLowerCase();
+    const yaEstaba = (state.settings?.scanRoots || []).some((root) => normalizar(root.path) === normalizar(folder));
+    try {
+      await api.addRoot({
+        path: folder,
+        kind,
+        label: folder.split(/[\\/]/).filter(Boolean).pop() || folder,
+        recursive: Boolean(deep),
+      });
+      await refresh({ quiet: true });
+      return !yaEstaba;
+    } catch {
+      return false;
+    }
+  }
+
   async function analyze() {
     const withSize = body.querySelector('[data-opt-size]')?.checked;
     const deep = body.querySelector('[data-opt-deep]')?.checked;
@@ -493,7 +513,13 @@ export function openFolderWizard({ path: initialPath = '' } = {}) {
     setFooter([{ label: 'Cancelar', class: 'ghost', action: () => modal.close() }]);
     try {
       analysis = await api.folders({ path: folder, kind, withSize, deep });
+      const nuevaVigilada = await guardarCarpeta(deep);
       renderResults();
+      if (nuevaVigilada) {
+        toast('La carpeta quedó guardada: se revisará sola en cada arranque', {
+          type: 'ok', title: 'Carpeta vigilada',
+        });
+      }
     } catch (err) {
       toast(err.message, { type: 'err' });
       renderKind();

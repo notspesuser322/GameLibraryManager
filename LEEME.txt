@@ -1,13 +1,14 @@
-NEBULA 1.2.0 - instrucciones rapidas
+NEBULA 1.3.0 - instrucciones rapidas
 ====================================
 
 DOS FORMAS DE USARLO
 --------------------
 
 A) INSTALADOR (recomendado)
-   Doble clic en Nebula-Instalador.exe y sigue el aviso.
+   Doble clic en Nebula-Instalador.exe.
    - Se instala en tu carpeta de usuario (no pide permisos de administrador).
-   - Crea accesos directos en el menu Inicio y en el escritorio.
+   - Crea accesos directos en el menu Inicio y en el escritorio, con el icono
+     del programa.
    - Aparece en "Aplicaciones instaladas" para quitarlo cuando quieras.
    - Al terminar te pregunta si quieres abrirlo.
 
@@ -16,22 +17,21 @@ B) PORTABLE (sin instalar)
 
 SE ABRE COMO UN PROGRAMA, NO COMO UNA PAGINA WEB
 ------------------------------------------------
-Nebula abre su propia ventana de aplicacion: sin barra de direcciones, sin
-pestanas y con el icono del programa en la barra de tareas. Se cierra cuando
-cierras esa ventana, como cualquier otro programa.
+Nebula ES un programa de Windows: al abrirlo aparece su propia ventana, con el
+icono en la barra de tareas y sin barra de direcciones ni pestanas. No hay
+ventana de consola, ni procesos sueltos de Node, ni nada que se quede corriendo
+por detras: cuando cierras la ventana, el programa termina.
 
-Para ello usa Chrome o Edge (cualquier navegador basado en Chromium que tengas
-instalado) en "modo aplicacion". Si no hay ninguno, abre la interfaz en tu
-navegador de siempre y lo avisa.
+En la carpeta de instalacion solo esta Nebula.exe. No hay lanzadores .bat ni
+.vbs de por medio, y no hace falta tener Node instalado.
+
+La ventana usa el navegador que ya tienes (Chrome o Edge) en "modo aplicacion",
+que es la forma de tener ventana nativa sin instalar nada mas. Si no hay ningun
+navegador compatible, abre la interfaz en el navegador de siempre y lo avisa.
 
 Si prefieres verlo en el navegador normal:
 
     Nebula.exe --browser
-
-Si vas a usarlo desde una terminal y quieres que siga funcionando al cerrar la
-ventana:
-
-    Nebula.exe --keep-alive
 
 La direccion sigue siendo http://localhost:4337, por si quieres abrir la
 biblioteca tambien desde el celular en tu red.
@@ -42,15 +42,40 @@ En tu carpeta de usuario, no junto al programa:
 
     %APPDATA%\Nebula
 
-Ahi estan la biblioteca (biblioteca.json) y las caratulas que descargues. Puedes
-mover el programa o reinstalarlo sin perder nada, y hacer copia de seguridad
-copiando esa carpeta.
+Ahi estan la biblioteca (biblioteca.json), las caratulas descargadas y el
+registro de lo que hace el programa (Nebula.log). Puedes mover el programa o
+reinstalarlo sin perder nada, y hacer copia de seguridad copiando esa carpeta.
+
+Si algo va mal, abre Nebula.log con el Bloc de notas: ahi se ve paso a paso que
+paso (escaneos, fichas, caratulas y errores concretos).
+
+TUS CARPETAS SE QUEDAN GUARDADAS
+--------------------------------
+Cuando agregas una carpeta (en "Buscar juegos" o en Ajustes), queda registrada.
+Desde ese momento Nebula la revisa SOLA cada vez que arranca y suma los juegos
+que aparezcan despues: no hay que volver a agregarla ni acordarse de escanear.
+
+Las carpetas se ven y se quitan en Ajustes -> Carpetas vigiladas. Se puede
+apagar el analisis automatico en Ajustes si prefieres hacerlo a mano.
+
+FICHAS Y CARATULAS AUTOMATICAS
+------------------------------
+Al entrar un juego en la biblioteca -da igual si lo agregaste a mano, con el
+asistente o en un analisis automatico- Nebula le busca la ficha (descripcion,
+desarrollador, fecha, generos) y le descarga la caratula sin preguntar. Se ve
+aparecer sola en la biblioteca unos segundos despues de agregar el juego.
+
+Consulta Wikipedia, Wikidata y Steam, y prueba varias direcciones de imagen
+hasta que una devuelve una imagen de verdad. Todo eso se puede apagar en
+Ajustes -> Metadatos, y en la ficha de cada juego hay una pestana "Metadatos"
+para corregirla o reintentar la caratula a mano.
+
+Necesita conexion a internet; si no la hay, avisa y la biblioteca sigue
+funcionando igual (con la caratula generada a partir del nombre).
 
 COMO QUITARLO
 -------------
-- Instalado: Aplicaciones instaladas -> Nebula -> Desinstalar. Tambien sirve
-  abrir una terminal en la carpeta de instalacion y ejecutar
-  "Nebula.exe --uninstall".
+- Instalado: Aplicaciones instaladas -> Nebula -> Desinstalar.
 - Portable: borra la carpeta donde lo descomprimiste.
 
 Tus datos se conservan siempre; si quieres borrarlos tambien, elimina la carpeta
@@ -85,19 +110,10 @@ Si aparece el aviso azul "Windows protegio tu PC", pulsa "Mas informacion" y
 luego "Ejecutar de todas formas". Sale porque el programa no esta firmado con un
 certificado de pago; no es un virus.
 
-METADATOS Y CARATULAS AUTOMATICOS
----------------------------------
-En la ficha de cada juego hay una pestana "Metadatos": sirve para traer
-descripcion, desarrollador, fecha, generos y caratula de juegos que no estan en
-ninguna tienda (por ejemplo Minecraft lanzado con HMCL, juegos emulados o
-programas sueltos). Consulta Wikipedia, Wikidata y Steam.
-
-La caratula se busca aparte de la ficha, porque no siempre esta en la misma
-fuente: se prueban varias direcciones (Steam y Wikimedia) hasta que una
-devuelve una imagen de verdad. En la pestana veras si la caratula llego
-("con imagen") o si solo se guardaron los datos ("solo datos"), con el motivo
-concreto cuando falla, y un boton "Reintentar la caratula" para volver a
-intentarlo sin tocar el resto.
-
-Necesita conexion a internet; si no la hay, avisa y la biblioteca sigue
-funcionando igual.
+DE DONDE VIENE LA IDEA
+----------------------
+Nebula sigue la idea de Playnite (https://playnite.link), el gestor de
+biblioteca de juegos libre para Windows: una sola lista con todos tus juegos,
+con su ficha, su caratula y sus horas. Nebula es una version propia, en espanol
+y pensada para juegos instalados en carpetas tuyas, no para tiendas. Todo el
+merito de la idea original es de sus autores.

@@ -18,6 +18,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
+import { leerSubsistema, quitarConsolaDelEjecutable, describirSubsistema, SUBSISTEMA_VENTANA } from './pe-subsystem.mjs';
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -47,6 +48,31 @@ async function marcar(ejecutable, log = write) {
   });
   if (!resultado.ok) log(`aviso: el ejecutable queda sin icono propio (${resultado.motivo})`);
   return resultado.ok;
+}
+
+/**
+ * Comprueba que el ejecutable terminado sirve de verdad: que la aplicación está
+ * dentro (el blob completo), que el interruptor de arranque quedó encendido y,
+ * en Windows, que no abre la ventana de consola. Si algo de esto falla, la
+ * compilación se detiene: es mejor no publicar nada que publicar un archivo roto.
+ */
+function comprobarSalida(archivo, blob, log = write) {
+  const datos = fs.readFileSync(archivo);
+  if (!datos.includes(blob)) {
+    throw new Error(`la aplicación no quedó dentro de ${path.basename(archivo)} (blob incompleto)`);
+  }
+  const indice = datos.indexOf(SENTINEL);
+  if (indice < 0 || datos[indice + SENTINEL.length + 1] !== 0x31 /* «1» */) {
+    throw new Error(`el interruptor de arranque de ${path.basename(archivo)} no quedó encendido`);
+  }
+  const subsistema = leerSubsistema(datos);
+  if (archivo.toLowerCase().endsWith('.exe')) {
+    if (subsistema !== SUBSISTEMA_VENTANA) {
+      throw new Error(`el ejecutable de Windows quedó como programa de consola (${subsistema})`);
+    }
+    log(`sin consola: ${describirSubsistema(subsistema)}`);
+  }
+  return true;
 }
 
 /* los dos sabores del ejecutable: solo el programa, o instalable */
@@ -154,6 +180,14 @@ export async function buildSea({ runtime, out, log = write, prelude = [], assets
 
   /* 5. icono propio y datos del programa (nombre, versión, autor) */
   if (path.extname(out).toLowerCase() === '.exe') await marcar(out, log);
+
+  /* 6. programa de ventana: sin la ventana negra de consola delante del usuario */
+  if (path.extname(out).toLowerCase() === '.exe' && !quitarConsolaDelEjecutable(out)) {
+    throw new Error('no se pudo marcar el ejecutable como programa de ventana');
+  }
+
+  /* 7. comprobación final: que todo lo anterior esté de verdad dentro del archivo */
+  comprobarSalida(out, blob, log);
   log(`ejecutable listo (${mb(fs.statSync(out).size)})`);
   return out;
 }

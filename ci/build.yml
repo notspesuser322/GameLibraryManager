@@ -100,6 +100,14 @@ jobs:
             $state = Invoke-RestMethod -Uri 'http://127.0.0.1:4399/api/state' -TimeoutSec 10
             Write-Host ("Correcto: {0} juegos, empaquetado={1}" -f $state.games.Count, $health.packaged)
             if ($state.games.Count -lt 10) { throw 'La biblioteca de ejemplo no cargo' }
+
+            # el programa no tiene consola: lo que cuenta va al registro en archivo
+            $registroApp = Join-Path $env:TEMP 'nebula-ci\Nebula.log'
+            if (-not (Test-Path $registroApp)) { throw 'El programa no escribio su registro (Nebula.log)' }
+            Write-Host ("Registro del programa: {0} lineas" -f (Get-Content $registroApp).Count)
+            $contenido = Get-Content $registroApp -Raw
+            if ($contenido -notmatch 'N.bula arranc') { throw 'El registro no tiene la marca de arranque' }
+            if ($contenido -notmatch 'Nébula') { throw 'El registro no guarda los acentos' }
           } finally {
             Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
           }
@@ -142,12 +150,19 @@ jobs:
           if (-not (Test-Path $acceso)) { Fallo 'No se creo el acceso directo del menu Inicio' }
           Write-Host 'Acceso directo del menu Inicio: correcto'
 
-          $lanzador = Join-Path $programa 'Nebula.vbs'
-          if (-not (Test-Path $lanzador)) { Fallo 'Falta el lanzador sin consola' }
+          # la carpeta de instalacion solo tiene el programa: sin lanzadores intermedios
+          $sobrantes = Get-ChildItem $programa -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Extension -in '.cmd', '.bat', '.vbs', '.ps1' }
+          if ($sobrantes) { Fallo ('Sobran lanzadores en la carpeta de instalacion: ' + ($sobrantes.Name -join ', ')) }
+          Write-Host 'Carpeta de instalacion limpia: solo el programa'
+
+          # el acceso directo apunta al propio ejecutable, que ya no abre consola
           $atajo = (New-Object -ComObject WScript.Shell).CreateShortcut($acceso)
           Write-Host ("Acceso directo: {0} {1}" -f $atajo.TargetPath, $atajo.Arguments)
-          if ($atajo.TargetPath -notmatch 'wscript') { Fallo 'El acceso directo deberia abrir el programa sin consola' }
-          if ($atajo.Arguments -notmatch 'Nebula\.vbs') { Fallo 'El acceso directo deberia usar el lanzador oculto' }
+          if ($atajo.TargetPath -notmatch 'Nebula\.exe$') { Fallo 'El acceso directo deberia abrir Nebula.exe' }
+          if ("$($atajo.TargetPath) $($atajo.Arguments)" -match 'wscript|\.vbs|\.cmd|\.bat') {
+            Fallo 'El acceso directo no deberia usar lanzadores intermedios'
+          }
           Add-Type -AssemblyName System.Drawing
           $icono = [System.Drawing.Icon]::ExtractAssociatedIcon((Join-Path $programa 'Nebula.exe'))
           if (-not $icono) { Fallo 'El ejecutable no tiene icono propio' }
@@ -196,6 +211,7 @@ jobs:
             if ($estado) {
               Write-Host ("Modo de apertura: {0}" -f $estado.app.ventana)
               if ($estado.app.ventana -ne 'aplicacion') { Write-Host '::warning::No se pudo abrir la ventana propia en este equipo' }
+              else { Write-Host 'La ventana propia se abrio sin consola' }
             } else {
               Write-Host '::warning::No se pudo leer el estado con la ventana abierta'
             }
@@ -267,7 +283,11 @@ jobs:
             descomprimelo y abre `Nebula.exe` desde donde lo tengas.
 
             Los dos incluyen lo mismo: el programa completo, sin necesidad de instalar Node ni nada mas.
-            Tus datos se guardan en `%APPDATA%\Nebula`.
+            Tus datos se guardan en `%APPDATA%\Nebula`, junto al registro de lo que hace el programa
+            (`Nebula.log`), que es donde mirar si algo no funciona.
+
+            El ejecutable es un programa de ventana: abre su propia ventana y **no deja ninguna consola
+            abierta** ni procesos sueltos por detras (al cerrar la ventana, termina).
 
             Si Windows muestra el aviso azul de SmartScreen, pulsa **Mas informacion** y luego
             **Ejecutar de todas formas**: aparece porque no esta firmado con un certificado de pago.

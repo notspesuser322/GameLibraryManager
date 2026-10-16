@@ -50,7 +50,9 @@ function defaultSettings() {
       lutris: true,
       itch: false,
     },
-    autoScanOnStart: false,
+    /* Nébula analiza sola las carpetas guardadas en cada arranque: la carpeta se
+       guarda una vez y no hay que volver a agregarla ni acordarse de nada. */
+    autoScanOnStart: true,
     trackPlaytime: true,
     closeLauncher: false,
     /* descarga (una sola vez) las carátulas oficiales desde el CDN de la tienda */
@@ -61,7 +63,9 @@ function defaultSettings() {
       language: 'es',
       providers: { steam: true, wikipedia: true, wikidata: true, rawg: false },
       rawgKey: '',
-      autoFillOnScan: false,
+      /* descarga ficha + carátula sola, tanto al escanear como al agregar a mano */
+      autoFillOnScan: true,
+      autoFillOnAdd: true,
       minScore: 0.5,
     },
     view: {
@@ -80,6 +84,9 @@ function defaultSettings() {
       background: 'aurora',
     },
     demo: false,
+    /* sube cuando cambian los valores por defecto de arriba, para aplicar los
+       nuevos valores a las instalaciones que ya existían (una sola vez) */
+    ajustesVersion: 2,
   };
 }
 
@@ -140,6 +147,15 @@ export class Store extends EventEmitter {
       games: Array.isArray(raw.games) ? raw.games.map((g) => normalizeGame(g)) : [],
       activeSessions: Array.isArray(raw.activeSessions) ? raw.activeSessions : [],
     };
+    /* Instalaciones anteriores a la versión 2 traían el análisis automático y la
+       descarga de fichas apagados de fábrica; se encienden una vez para que la
+       biblioteca se mantenga sola. Después se pueden apagar en Ajustes. */
+    if (Number(raw.settings?.ajustesVersion || 1) < 2) {
+      db.settings.autoScanOnStart = true;
+      db.settings.metadata.autoFillOnScan = true;
+      db.settings.metadata.autoFillOnAdd = true;
+      db.settings.ajustesVersion = 2;
+    }
     return db;
   }
 

@@ -135,7 +135,15 @@ async function poll() {
     const ids = Object.keys(status.sessions || {});
     const previous = Object.keys(state.launcher?.sessions || {});
     const changed = ids.length !== previous.length || ids.some((id) => !previous.includes(id));
+    /* fichas automaticas: cuando el servidor termina de traer una ficha o una
+       caratula, se repinta la biblioteca sin que el usuario haga nada */
+    const fichas = status.fichas || {};
+    const aplicadasAntes = state.fichasAplicadas ?? 0;
+    const fichaNueva = Number(fichas.aplicadas || 0) > aplicadasAntes;
+    state.fichasAplicadas = Number(fichas.aplicadas || 0);
+    state.fichasPendientes = Number(fichas.pendientes || 0);
     applyLauncherStatus(status);
+    if (fichaNueva && !changed) await refresh({ quiet: true });
     if (changed) {
       if (ids.length < previous.length) {
         /* una sesión terminó: refrescar horas y estadísticas */

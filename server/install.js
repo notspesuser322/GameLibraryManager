@@ -40,8 +40,6 @@ export function rutasInstalacion({
   return {
     dir,
     exe: path.join(dir, `${NOMBRE}.exe`),
-    lanzador: path.join(dir, `${NOMBRE}.cmd`),
-    lanzadorOculto: path.join(dir, `${NOMBRE}.vbs`),
     menu: path.join(roaming, 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
     escritorio: path.join(homedir, 'Desktop'),
     datos: path.join(roaming, NOMBRE),
@@ -50,37 +48,17 @@ export function rutasInstalacion({
   };
 }
 
-/**
- * Contenido del lanzador oculto (VBS).
- * Sirve para que al abrir Nébula desde el acceso directo no aparezca la ventana
- * negra de la consola: el programa se abre como cualquier aplicación de Windows.
- */
-export function lanzadorOculto() {
-  /* las comillas dobles dentro de una cadena de VBS se escriben duplicadas */
-  const orden = 'shell.Run """" & carpeta & "\\Nebula.exe""", 0, False';
-  return [
-    "' Abre Nebula sin mostrar la ventana de consola.",
-    'Set fso = CreateObject("Scripting.FileSystemObject")',
-    'carpeta = fso.GetParentFolderName(WScript.ScriptFullName)',
-    'Set shell = CreateObject("WScript.Shell")',
-    'shell.CurrentDirectory = carpeta',
-    orden,
-    '',
-  ].join('\r\n');
-}
-
 /** Devuelve el script de PowerShell que crea los dos accesos directos. */
 export function scriptAccesosDirectos(rutas) {
-  /* el acceso directo apunta al lanzador oculto, con el icono del programa */
-  const wscript = '%SystemRoot%\\System32\\wscript.exe';
+  /* el acceso directo apunta al propio programa: el ejecutable ya es un programa
+     de ventana (sin consola), así que no hace falta ningún lanzador intermedio */
   return [
     '$ErrorActionPreference = "Stop"',
     '$shell = New-Object -ComObject WScript.Shell',
     'foreach ($base in @([Environment]::GetFolderPath("Programs"), [Environment]::GetFolderPath("Desktop"))) {',
     '  if (-not $base) { continue }',
     `  $lnk = $shell.CreateShortcut((Join-Path $base "${NOMBRE}.lnk"))`,
-    `  $lnk.TargetPath = "${wscript}"`,
-    `  $lnk.Arguments = '"${rutas.lanzadorOculto}"'`,
+    `  $lnk.TargetPath = "${rutas.exe}"`,
     `  $lnk.WorkingDirectory = "${rutas.dir}"`,
     `  $lnk.IconLocation = "${rutas.exe},0"`,
     `  $lnk.Description = "Biblioteca de juegos"`,
@@ -106,7 +84,6 @@ export function scriptBorrarAccesosDirectos() {
  * Las comillas se escriben con Chr(34) para no pelearse con el escapado.
  */
 export function scriptAccesosDirectosVbs(rutas) {
-  const wscript = '%SystemRoot%\\System32\\wscript.exe';
   return [
     cabeceraVbs(),
     'Dim bases, base, lnk',
@@ -114,8 +91,7 @@ export function scriptAccesosDirectosVbs(rutas) {
     'For Each base In bases',
     '  If fso.FolderExists(base) Then',
     `    Set lnk = shell.CreateShortcut(fso.BuildPath(base, "${NOMBRE}.lnk"))`,
-    `    lnk.TargetPath = "${wscript}"`,
-    `    lnk.Arguments = Chr(34) & "${rutas.lanzadorOculto}" & Chr(34)`,
+    `    lnk.TargetPath = "${rutas.exe}"`,
     `    lnk.WorkingDirectory = "${rutas.dir}"`,
     `    lnk.IconLocation = "${rutas.exe},0"`,
     '    lnk.Description = "Biblioteca de juegos"',
@@ -366,11 +342,13 @@ export async function instalar({ origen = process.execPath, silencioso = false, 
       registrar('ya se está ejecutando desde la carpeta de instalación: no se copia');
     }
 
-    /* 2. lanzador de consola (opcional) y lanzador oculto que usan los accesos directos */
-    const lanzador = `@echo off\r\ntitle ${NOMBRE_VISIBLE}\r\ncd /d "%~dp0"\r\n${NOMBRE}.exe %*\r\n`;
-    fs.writeFileSync(rutas.lanzador, lanzador, 'latin1');
-    fs.writeFileSync(rutas.lanzadorOculto, lanzadorOculto(), 'latin1');
-    registrar('lanzadores escritos (consola y oculto)');
+    /* 2. se quitan los lanzadores de versiones anteriores: el programa ya no
+       necesita ninguno (el ejecutable abre su propia ventana, sin consola) */
+    for (const sobrante of [`${NOMBRE}.cmd`, `${NOMBRE}.bat`, `${NOMBRE}.vbs`]) {
+      try {
+        fs.rmSync(path.join(rutas.dir, sobrante), { force: true });
+      } catch { /* no estaba */ }
+    }
 
     /* 3. accesos directos en el menú Inicio y en el escritorio */
     try {
@@ -438,11 +416,6 @@ export async function desinstalar({ silencioso = false, borrarDatos = false, rut
   } catch (err) {
     registrar(`ERROR en los accesos directos: ${err.message}`);
   }
-
-  try {
-    fs.rmSync(rutas.lanzadorOculto, { force: true });
-    registrar('lanzador oculto eliminado');
-  } catch { /* ya no estaba */ }
 
   try {
     ejecutar('reg.exe', argumentosBorrarRegistro(rutas), { capturar: true });

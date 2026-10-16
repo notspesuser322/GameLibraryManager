@@ -25,6 +25,7 @@ import { MetadataService, buildPatch } from './metadata.js';
 import { VERSION as VERSION_APP } from './version.js';
 import { resolveAssets, resolveDataDir } from './assets.js';
 import { prepararConsola } from './console.js';
+import { prepararRegistro, rutaRegistro } from './registro.js';
 import { abrirVentana, hayEntornoGrafico, navegadorDisponible, ventanaAbierta, avisar } from './desktop.js';
 
 /* lo primero: dejar la consola en condiciones (en Windows evita que los acentos
@@ -105,10 +106,13 @@ Variables de entorno:
 /* ------------------------------------------------------------------ arranque */
 
 const DATA_DIR = resolveDataDir({ assets });
+/* el registro va a un archivo: el programa de Windows no tiene consola donde leer */
+prepararRegistro(DATA_DIR);
 const store = new Store(path.join(DATA_DIR, 'biblioteca.json'));
 const media = new MediaStore(path.join(DATA_DIR, 'media'));
 const metadata = new MetadataService({ getSettings: () => store.settings });
-let peticionesCliente = 0;      /* peticiones recibidas desde que arrancó */
+let peticionesCliente = 0;
+const banderas = { fichasActivas: false };      /* peticiones recibidas desde que arrancó */
 let ventanaAbiertaEn = 0;       /* cuándo se abrió la ventana de la aplicación */
 
 /* tiempos de la vigilancia de la ventana (ajustables para las pruebas) */
@@ -444,6 +448,59 @@ const scanState = {
   last: null,
 };
 
+/* --------------------------------------------------------- ficha automatica */
+/* Cuando un juego entra en la biblioteca —a mano o desde un análisis— Nébula le
+   busca la ficha y le descarga la carátula sin que haya que pedirlo. Se atiende
+   de uno en uno para no castigar a las fuentes, y el cliente se entera por el
+   contador «aplicadas» (ver /api/launcher) para repintar solo. */
+const fichas = {
+  cola: [],
+  enCurso: null,
+  aplicadas: 0,
+  errores: [],
+};
+
+function fichaPendienteDe(gameId) {
+  return fichas.enCurso === gameId || fichas.cola.includes(gameId);
+}
+
+function encolarFicha(gameId) {
+  if (!gameId) return;
+  if (store.settings.metadata?.enabled === false) return;
+  if (store.settings.metadata?.autoFillOnAdd === false) return;
+  if (!store.get(gameId) || fichaPendienteDe(gameId)) return;
+  fichas.cola.push(gameId);
+  void atenderFichas();
+}
+
+async function atenderFichas() {
+  if (banderas.fichasActivas) return;
+  banderas.fichasActivas = true;
+  try {
+    while (fichas.cola.length) {
+      const gameId = fichas.cola.shift();
+      fichas.enCurso = gameId;
+      const game = store.get(gameId);
+      if (game) {
+        try {
+          const candidate = await metadata.bestMatch(game.name);
+          if (candidate) {
+            await applyMetadata(game, candidate, { overwrite: false });
+            await store.flush();
+            fichas.aplicadas++;
+          }
+        } catch (err) {
+          fichas.errores.push({ id: gameId, nombre: game.name, message: err.message });
+          if (fichas.errores.length > 20) fichas.errores.shift();
+        }
+      }
+      fichas.enCurso = null;
+    }
+  } finally {
+    banderas.fichasActivas = false;
+  }
+}
+
 async function runScan({ sources, roots, silent = false }) {
   if (scanState.running) throw new Error('Ya hay un escaneo en curso');
   scanState.running = true;
@@ -616,6 +673,7 @@ async function handleApi(req, res, pathname, query) {
       hostname: os.hostname(),
       mode: store.settings.demo ? 'demo' : 'normal',
       dataDir: DATA_DIR,
+      log: rutaRegistro(),
       packaged: assets.packaged,
       assetsRoot: ROOT_DIR,
       now: nowIso(),
@@ -662,7 +720,9 @@ async function handleApi(req, res, pathname, query) {
         if (!body.name) return error(res, 400, 'El nombre es obligatorio');
         const { game, created } = await store.add(body, { dedupe: body.allowDuplicates ? false : true });
         await store.flush();
-        return json(res, created ? 201 : 200, { game: publicGame(game), created });
+        /* ficha y carátula automaticas tambien cuando el juego se agrega a mano */
+        if (created) encolarFicha(game.id);
+        return json(res, created ? 201 : 200, { game: publicGame(game), created, fichaEnCola: created && fichaPendienteDe(game.id) });
       }
       if (method === 'DELETE') {
         const body = await readBody(req);
@@ -901,7 +961,16 @@ async function handleApi(req, res, pathname, query) {
 
   /* ----------------------------------------------------------- lanzadera */
   if (resource === 'launcher') {
-    if (id === 'log' || (!id && method === 'GET')) return json(res, 200, launcher.status());
+    if (id === 'log' || (!id && method === 'GET')) {
+      return json(res, 200, {
+        ...launcher.status(),
+        fichas: {
+          pendientes: fichas.cola.length + (fichas.enCurso ? 1 : 0),
+          aplicadas: fichas.aplicadas,
+          ultimosErrores: fichas.errores.slice(-3),
+        },
+      });
+    }
     if (id === 'stop-all' && method === 'POST') {
       const results = [];
       for (const gameId of [...launcher.running.keys()]) {
@@ -948,6 +1017,24 @@ async function handleApi(req, res, pathname, query) {
     if (method === 'POST') {
       const body = await readBody(req);
       if (!body.path) return error(res, 400, 'Falta la ruta');
+      /* Si la carpeta ya estaba registrada se actualiza en vez de duplicarla:
+         el asistente de «Buscar juegos» guarda solo las carpetas que analiza y
+         no debe crear una fila nueva cada vez. */
+      const resuelta = path.resolve(body.path);
+      const iguales = (a, b) => a.localeCompare(b, 'es', { sensitivity: 'accent' }) === 0
+        || a.replace(/[\\/]+$/, '').toLowerCase() === b.replace(/[\\/]+$/, '').toLowerCase();
+      const existente = store.settings.scanRoots.find((r) => iguales(r.path, resuelta));
+      if (existente) {
+        const actualizado = {
+          ...existente,
+          kind: body.kind ? (body.kind === 'rom' ? 'rom' : body.kind === 'single' ? 'single' : 'collection') : existente.kind,
+          label: body.label || existente.label,
+          recursive: body.recursive === undefined ? existente.recursive : Boolean(body.recursive),
+        };
+        store.setSettings({ scanRoots: store.settings.scanRoots.map((r) => (r.id === existente.id ? actualizado : r)) });
+        await store.flush();
+        return json(res, 200, { root: actualizado, existing: true });
+      }
       const root = {
         id: uid('root'),
         path: path.resolve(body.path),
@@ -1176,12 +1263,28 @@ async function serveImage(res, req, game, kind) {
   } catch {
     return error(res, 404, 'Imagen no disponible');
   }
+  /* Las imágenes se sirven con validador y sin caducidad fija: la dirección de
+     la carátula es siempre la misma (/api/games/<id>/cover), así que con
+     «max-age» el navegador seguía enseñando la carátula generada durante una
+     hora aunque la de verdad ya estuviera descargada. */
+  let sello;
+  try {
+    const info = await fsp.stat(file);
+    sello = `"${info.size.toString(16)}-${Math.round(info.mtimeMs).toString(16)}"`;
+  } catch {
+    sello = null;
+  }
+  if (sello && (req?.headers?.['if-none-match'] === sello)) {
+    res.writeHead(304, { etag: sello, 'cache-control': 'no-cache' });
+    return res.end();
+  }
   const headers = {
     'content-type': mimeFor(file),
     'content-length': buffer.length,
-    'cache-control': 'public, max-age=3600',
+    'cache-control': 'no-cache',
     'x-content-type-options': 'nosniff',
   };
+  if (sello) headers.etag = sello;
   if (file.endsWith('.svg')) headers['content-security-policy'] = "default-src 'none'; style-src 'unsafe-inline'";
   res.writeHead(200, headers);
   res.end(buffer);
