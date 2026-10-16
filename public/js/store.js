@@ -16,7 +16,7 @@ export const state = {
   emulatorPresets: [],
   launcher: { sessions: {}, count: 0, log: [] },
   scan: { running: false, summary: null },
-  app: { version: '1.0.0', platform: 'linux', dataDir: '' },
+  app: { version: '1.1.0', platform: 'linux', dataDir: '' },
   view: 'library',
   query: {
     search: '',

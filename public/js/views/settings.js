@@ -130,7 +130,7 @@ export function renderSettings(root) {
     <div class="section-title"><h2>Acerca de</h2></div>
     <div class="panel">
       <dl class="kv">
-        <dt>Versión</dt><dd>${esc(app.version || '1.0.0')}</dd>
+        <dt>Versión</dt><dd>${esc(app.version || '1.1.0')}</dd>
         <dt>Sistema</dt><dd>${esc(app.platform || '')}</dd>
         <dt>Iniciada</dt><dd>${esc(app.startedAt ? relTime(app.startedAt) : '—')}</dd>
         <dt>Juegos</dt><dd>${state.facets.total}</dd>

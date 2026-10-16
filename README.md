@@ -8,8 +8,9 @@ Proyecto propio, pensado para uso personal y privado. Funciona **sin dependencia
 externas**: solo necesita Node.js. No hay cuentas, ni nube, ni telemetría.
 
 ```
-Ludoteca.exe       →  doble clic; abre el navegador con tu biblioteca
-npm start          →  http://localhost:4337 (si prefieres ejecutarlo desde el código)
+Ludoteca-1.1.0-instalador.exe  →  doble clic; se instala y abre tu biblioteca
+Ludoteca-1.1.0-portable.zip    →  descomprimir y abrir Ludoteca.exe
+npm start                      →  http://localhost:4337 (ejecutándolo desde el código)
 ```
 
 ---
@@ -41,33 +42,49 @@ npm start          →  http://localhost:4337 (si prefieres ejecutarlo desde el 
 
 ## Puesta en marcha
 
-### En Windows, con el ejecutable (nada que instalar)
+### En Windows: instalador o portable (nada que instalar aparte)
 
-Descarga **`Ludoteca.exe`** (o el ZIP con el LEEME) y haz doble clic. Lleva dentro todo lo
-necesario: no hace falta instalar Node ni nada más.
+Los dos archivos llevan dentro todo lo necesario: no hace falta instalar Node ni nada más.
+Se publican solos en **Releases** en cada cambio.
 
-- Los ejecutables se generan solos en cada `push` mediante GitHub Actions: abre la pestaña
-  **Actions → Construir ejecutable → última ejecución → Artifacts** y descarga
-  `ludoteca-windows.zip` (también hay una versión para Linux).
+**Instalador (lo más cómodo).** Descarga `Ludoteca-<versión>-instalador.exe` y haz doble clic.
+Se instala en tu carpeta de usuario, sin pedir permisos de administrador, y además:
 
-  Para activar esa construcción hay que instalar una vez el flujo de trabajo (está listo en
-  `ci/build.yml`), porque GitHub exige un permiso especial para escribir dentro de
-  `.github/workflows/`:
+- crea los accesos directos en el menú Inicio y en el escritorio;
+- aparece en **Aplicaciones instaladas** para quitarlo cuando quieras (o con
+  `Ludoteca.exe --uninstall`, o `--uninstall --silent` para hacerlo sin diálogos);
+- al terminar te pregunta si quieres abrirlo.
 
-  ```bash
-  mkdir -p .github/workflows
-  cp ci/build.yml .github/workflows/build.yml
-  git add .github/workflows/build.yml
-  git commit -m "Construccion automatica del ejecutable"
-  git push
-  ```
+El instalador y el programa son el mismo archivo: la copia instalada detecta dónde está y arranca
+la biblioteca en lugar de instalarse otra vez.
 
-  A partir de ahí, cada push construye los ejecutables y pasa la batería de pruebas. Si el
-  programa que sube los cambios tiene el permiso `workflows`, se puede dejar directamente en
-  `.github/workflows/build.yml`.
-- Al abrirlo por primera vez se crea la carpeta de datos en tu usuario
-  (`%APPDATA%\Ludoteca`) y se abre el navegador en `http://localhost:4337`.
-- Sirve el mismo comando para la terminal: `Ludoteca.exe --port 4400 --demo`.
+**Portable.** Descarga `Ludoteca-<versión>-portable.zip`, descomprímelo y abre `Ludoteca.exe`
+desde donde lo tengas. No se instala nada en el sistema.
+
+En los dos casos los datos van a `%APPDATA%\Ludoteca` (no junto al programa) y se conservan si
+reinstalas o desinstalas. Se abre el navegador en `http://localhost:4337`, y desde la terminal
+sirve el mismo ejecutable: `Ludoteca.exe --port 4400 --demo`.
+
+### Publicación automática (una sola vez)
+
+Cada `push` pasa las pruebas, construye los dos ejecutables, **los comprueba de verdad** (arranca
+el portable; instala, abre y desinstala el instalador, verificando accesos directos y registro) y
+**publica una Release** con la etiqueta de la versión, los dos archivos y las notas generadas a
+partir de los commits. También quedan como artefactos en la pestaña **Actions**.
+
+Para activarlo hay que copiar el flujo de trabajo a su sitio una vez, porque GitHub exige un
+permiso especial (que no todos los accesos tienen) para escribir dentro de `.github/workflows/`:
+
+```bash
+mkdir -p .github/workflows
+cp ci/build.yml .github/workflows/build.yml
+git add .github/workflows/build.yml
+git commit -m "Construccion automatica del ejecutable"
+git push
+```
+
+Si prefieres hacerlo desde la web de GitHub: abre `ci/build.yml`, copia todo el contenido, crea
+`.github/workflows/build.yml` con **Add file → Create new file** y pégalo.
 
 ### Desde el código (Windows, macOS o Linux)
 
@@ -77,29 +94,31 @@ npm start -- --open        # además abre el navegador
 npm start -- --port 5000   # otro puerto
 npm run demo               # arranca con una biblioteca de ejemplo (40 juegos ficticios)
 
-npm test                   # ejecuta la batería de pruebas (74 pruebas)
+npm test                   # ejecuta la batería de pruebas (82 pruebas)
 ```
 
 También están **`iniciar.bat`** (Windows) e **`iniciar.sh`** (macOS/Linux) como atajo:
 comprueban que Node esté instalado, arrancan la app y abren el navegador
 (`./iniciar.sh --demo --port 5000`).
 
-### Construir el ejecutable tú mismo
+### Construir los ejecutables tú mismo
 
 Con el Node del sistema (para Linux, macOS o Windows):
 
 ```bash
 npm install --no-save esbuild postject
-node scripts/build-sea.mjs --runtime "$(command -v node)" --out dist/Ludoteca.exe
+node scripts/build-sea.mjs --modo portable  --runtime "$(command -v node)" --out dist/Ludoteca.exe
+node scripts/build-sea.mjs --modo instalador --runtime "$(command -v node)" --out dist/Ludoteca-Instalador.exe
 ```
 
-Para el ejecutable **de Windows desde Linux o macOS** (trae el node.exe oficial a través del
+Para los ejecutables **de Windows desde Linux o macOS** (trae el node.exe oficial a través del
 registro de npm, así que no hace falta Windows ni la web de Node):
 
 ```bash
 npm install --no-save esbuild postject
 node scripts/fetch-node-win.mjs
-node scripts/build-sea.mjs --runtime dist/node-win/package/bin/node.exe --out dist/Ludoteca.exe
+node scripts/build-sea.mjs --modo portable  --runtime dist/node-win/package/bin/node.exe --out dist/Ludoteca.exe
+node scripts/build-sea.mjs --modo instalador --runtime dist/node-win/package/bin/node.exe --out dist/Ludoteca-Instalador.exe
 ```
 
 El resultado es un único archivo con el servidor, la interfaz y la documentación dentro. Al
@@ -308,6 +327,8 @@ server/
   index.js     servidor HTTP, API y archivos estáticos
   assets.js    rutas de la app: funcionan igual desde el código y dentro del ejecutable
   console.js   salida por consola legible en cualquier codificación (Windows incluido)
+  install.js   instalación y desinstalación en Windows (accesos directos, registro)
+  version.js   la versión, en un solo sitio
   sea.js       extrae la interfaz incrustada cuando corre como ejecutable único
   metadata.js  búsqueda de fichas: Wikipedia, Wikidata, Steam y RAWG
   store.js     almacén JSON con escritura atómica, respaldos, sesiones y estadísticas
@@ -320,9 +341,10 @@ public/
   index.html   estructura de la interfaz
   styles.css   tema oscuro con acento configurable
   js/          app, estado, componentes, vistas (biblioteca, ficha, actividad, estadísticas, buscar, ajustes)
-test/          74 pruebas: almacén, detección, lanzador, arte, metadatos, consola y API completa
+test/          82 pruebas: almacén, detección, lanzador, arte, metadatos, consola, instalación y API
 scripts/
-  build-sea.mjs     construye el ejecutable único (Node + esbuild + postject)
+  build-sea.mjs     construye los ejecutables (portable e instalador) con Node + esbuild + postject
+  installer-main.js arranque del instalador: instala, abre el programa o desinstala
   fetch-node-win.mjs  trae el node.exe oficial de Windows desde el registro de npm
   build-dist.mjs    prepara la carpeta distribuible con el servidor empaquetado
   portable.mjs      ZIP escrito a mano: empaquetado alternativo sin herramientas externas
@@ -348,7 +370,8 @@ metadatos usan respuestas simuladas de las fuentes, así que funcionan sin conex
 comprueban el análisis de cada proveedor, el orden por parecido, el respaldo entre idiomas, la
 tolerancia a fuentes caídas y la regla de "no pisar lo que ya escribiste". Otras ocho
 comprueban que la salida por consola queda legible incluso cuando la consola usa una
-codificación antigua.
+codificación antigua, y ocho cubren la instalación en Windows (rutas, accesos directos,
+registro y detección de "ya instalado").
 
 ## Limitaciones conocidas
 

@@ -31,7 +31,21 @@ function arg(name, fallback = null) {
 const write = (message) => process.stdout.write(`  ${message}\n`);
 const mb = (bytes) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
-export async function buildSea({ runtime, out, log = write, prelude = [], assets = {} } = {}) {
+/* los dos sabores del ejecutable: solo el programa, o instalable */
+export const MODOS = {
+  portable: {
+    entry: path.join(ROOT, 'scripts', 'sea-main.js'),
+    nombre: 'Ludoteca.exe',
+    descripcion: 'version portable (el programa solo)',
+  },
+  instalador: {
+    entry: path.join(ROOT, 'scripts', 'installer-main.js'),
+    nombre: 'Ludoteca-Instalador.exe',
+    descripcion: 'instalador (instala, arranca y se desinstala)',
+  },
+};
+
+export async function buildSea({ runtime, out, log = write, prelude = [], assets = {}, modo = 'portable' } = {}) {
   const work = path.join(ROOT, 'dist', 'sea');
   fs.rmSync(work, { recursive: true, force: true });
   fs.mkdirSync(work, { recursive: true });
@@ -50,7 +64,9 @@ export async function buildSea({ runtime, out, log = write, prelude = [], assets
   }
 
   /* 1. servidor + preludio en un solo archivo */
-  const entry = path.join(ROOT, 'scripts', 'sea-main.js');
+  const entrada = MODOS[modo] || MODOS.portable;
+  const entry = entrada.entry;
+  const version = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
   const bundlePath = path.join(work, 'main.js');
   await esbuild.build({
     entryPoints: [entry],
@@ -61,11 +77,14 @@ export async function buildSea({ runtime, out, log = write, prelude = [], assets
     outfile: bundlePath,
     logLevel: 'silent',
     legalComments: 'none',
-    define: { 'import.meta.url': 'importMetaUrl' },
+    define: {
+      'import.meta.url': 'importMetaUrl',
+      __LUDOTECA_VERSION__: JSON.stringify(version),
+    },
     banner: { js: "const importMetaUrl = require('node:url').pathToFileURL(__filename).href;" },
     inject: prelude.length ? prelude : undefined,
   });
-  log(`servidor empaquetado (${mb(fs.statSync(bundlePath).size)})`);
+  log(`servidor empaquetado (${mb(fs.statSync(bundlePath).size)}) · ${entrada.descripcion}`);
 
   /* 2. recursos incrustados: interfaz y documentación */
   const assetList = { ...assets };
@@ -115,10 +134,15 @@ export async function buildSea({ runtime, out, log = write, prelude = [], assets
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMain) {
+  const modo = arg('modo', 'portable');
+  const definicion = MODOS[modo] || MODOS.portable;
   const runtime = arg('runtime', process.execPath);
-  const out = path.resolve(arg('out', path.join(ROOT, 'dist', process.platform === 'win32' ? 'Ludoteca.exe' : 'ludoteca')));
+  const porDefecto = process.platform === 'win32'
+    ? definicion.nombre
+    : definicion.nombre.replace(/\.exe$/, '').toLowerCase();
+  const out = path.resolve(arg('out', path.join(ROOT, 'dist', porDefecto)));
   try {
-    const result = await buildSea({ runtime, out });
+    const result = await buildSea({ runtime, out, modo });
     process.stdout.write(`
   Ejecutable único: ${result}
   Doble clic para abrir la biblioteca, o desde la terminal:

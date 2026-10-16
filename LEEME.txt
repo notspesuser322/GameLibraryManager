@@ -1,12 +1,21 @@
-LUDOTECA - instrucciones rapidas
-===============================
+LUDOTECA 1.1.0 - instrucciones rapidas
+======================================
 
-1. Descomprime esta carpeta donde quieras.
-2. Haz doble clic en Ludoteca.exe.
-3. Se abre el navegador con tu biblioteca en http://localhost:4337
+DOS FORMAS DE USARLO
+--------------------
 
-No hace falta instalar Node, ni Python, ni nada mas. El ejecutable lleva dentro
-todo lo necesario.
+A) INSTALADOR (recomendado)
+   Doble clic en Ludoteca-Instalador.exe y sigue el aviso.
+   - Se instala en tu carpeta de usuario (no pide permisos de administrador).
+   - Crea accesos directos en el menu Inicio y en el escritorio.
+   - Aparece en "Aplicaciones instaladas" para quitarlo cuando quieras.
+   - Al terminar te pregunta si quieres abrirlo.
+
+B) PORTABLE (sin instalar)
+   Descomprime el ZIP y abre Ludoteca.exe desde donde lo tengas.
+
+En los dos casos se abre el navegador con tu biblioteca en
+http://localhost:4337
 
 DONDE SE GUARDAN TUS DATOS
 --------------------------
@@ -14,13 +23,23 @@ En tu carpeta de usuario, no junto al programa:
 
     %APPDATA%\Ludoteca
 
-Ahi estan la biblioteca (biblioteca.json) y las caratulas que descargues.
-Puedes mover o copiar Ludoteca.exe de carpeta sin perder nada, y hacer copia de
-seguridad copiando esa carpeta.
+Ahi estan la biblioteca (biblioteca.json) y las caratulas que descargues. Puedes
+mover el programa o reinstalarlo sin perder nada, y hacer copia de seguridad
+copiando esa carpeta.
+
+COMO QUITARLO
+-------------
+- Instalado: Aplicaciones instaladas -> Ludoteca -> Desinstalar. Tambien sirve
+  abrir una terminal en la carpeta de instalacion y ejecutar
+  "Ludoteca.exe --uninstall".
+- Portable: borra la carpeta donde lo descomprimiste.
+
+Tus datos se conservan siempre; si quieres borrarlos tambien, elimina la carpeta
+%APPDATA%\Ludoteca.
 
 SI EL PUERTO 4337 ESTA OCUPADO
 ------------------------------
-Abre una terminal en esta carpeta y ejecuta:
+Abre una terminal y ejecuta:
 
     Ludoteca.exe --port 4400
 
@@ -33,18 +52,16 @@ Opciones disponibles:
     --no-open          no abrir el navegador
     --version, -v      version del programa
 
-Tambien puedes usar variables de entorno en lugar de opciones:
+Variables de entorno en lugar de opciones:
 
     set LUDOTECA_PORT=4400
     Ludoteca.exe
 
-COMO CERRARLO
--------------
-Cierra la ventana negra (la consola) o pulsa Ctrl+C en ella.
-
-PARA DESINSTALARLO
-------------------
-Borra Ludoteca.exe y la carpeta %APPDATA%\Ludoteca.
+AVISO DE WINDOWS
+----------------
+Si aparece el aviso azul "Windows protegio tu PC", pulsa "Mas informacion" y
+luego "Ejecutar de todas formas". Sale porque el programa no esta firmado con un
+certificado de pago; no es un virus.
 
 METADATOS AUTOMATICOS
 ---------------------

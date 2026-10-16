@@ -22,6 +22,7 @@ import {
 } from './scanner.js';
 import { buildDemoGames, touchToday } from './demo.js';
 import { MetadataService, buildPatch } from './metadata.js';
+import { VERSION as VERSION_APP } from './version.js';
 import { resolveAssets, resolveDataDir } from './assets.js';
 import { prepararConsola } from './console.js';
 
@@ -32,7 +33,7 @@ import { nowIso, uid, ensureDir, exists, isInside, formatDuration } from './util
 import * as util from './util.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const VERSION = '1.0.0';
+const VERSION = VERSION_APP;
 
 /* rutas: funcionan igual en el repositorio y empaquetado como ejecutable */
 const assets = resolveAssets();
