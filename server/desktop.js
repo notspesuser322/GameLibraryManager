@@ -23,15 +23,19 @@ function perfilVentana() {
   return path.join(os.tmpdir(), 'Nebula', 'ventana');
 }
 
-/** Rutas habituales de los navegadores basados en Chromium, por sistema. */
-function candidatos() {
+/**
+ * Rutas habituales de los navegadores basados en Chromium, por sistema.
+ * Se puede indicar otro entorno y otro sistema para poder comprobarlo en las
+ * pruebas sin depender de lo que haya instalado en el equipo.
+ */
+function candidatos({ env = process.env, platform = process.platform } = {}) {
   const lista = [];
   const agregar = (ruta, nombre) => { if (ruta) lista.push({ ruta, nombre }); };
 
-  if (process.platform === 'win32') {
-    const pf = process.env['ProgramFiles'] || 'C:\\Program Files';
-    const pf86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
-    const local = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
+  if (platform === 'win32') {
+    const pf = env['ProgramFiles'] || 'C:\\Program Files';
+    const pf86 = env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+    const local = env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
     agregar(path.join(pf, 'Google', 'Chrome', 'Application', 'chrome.exe'), 'Chrome');
     agregar(path.join(pf86, 'Google', 'Chrome', 'Application', 'chrome.exe'), 'Chrome');
     agregar(path.join(local, 'Google', 'Chrome', 'Application', 'chrome.exe'), 'Chrome');
@@ -39,27 +43,27 @@ function candidatos() {
     agregar(path.join(pf86, 'Microsoft', 'Edge', 'Application', 'msedge.exe'), 'Edge');
     agregar(path.join(pf, 'BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe'), 'Brave');
     agregar(path.join(pf, 'Opera', 'launcher.exe'), 'Opera');
-  } else if (process.platform === 'darwin') {
+  } else if (platform === 'darwin') {
     agregar('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', 'Chrome');
     agregar('/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge', 'Edge');
     agregar('/Applications/Brave Browser.app/Contents/MacOS/Brave Browser', 'Brave');
     agregar('/Applications/Chromium.app/Contents/MacOS/Chromium', 'Chromium');
   } else {
     for (const nombre of ['google-chrome-stable', 'google-chrome', 'chromium', 'chromium-browser', 'microsoft-edge', 'brave-browser']) {
-      const encontrado = buscarEnPath(nombre);
+      const encontrado = buscarEnPath(nombre, env.PATH);
       agregar(encontrado, nombre);
     }
   }
 
   /* se admite indicar uno concreto con NEBULA_NAVEGADOR */
-  const propio = process.env.NEBULA_NAVEGADOR;
+  const propio = env.NEBULA_NAVEGADOR;
   if (propio) lista.unshift({ ruta: propio, nombre: 'indicado' });
 
   return lista.filter((c, i, todos) => todos.findIndex((o) => o.ruta === c.ruta) === i);
 }
 
-function buscarEnPath(nombre) {
-  const rutas = (process.env.PATH || '').split(path.delimiter);
+function buscarEnPath(nombre, ruta = process.env.PATH) {
+  const rutas = String(ruta || '').split(path.delimiter);
   for (const carpeta of rutas) {
     const completo = path.join(carpeta, nombre);
     try {
@@ -70,8 +74,8 @@ function buscarEnPath(nombre) {
 }
 
 /** Primer navegador disponible que exista de verdad. */
-export function navegadorDisponible() {
-  for (const candidato of candidatos()) {
+export function navegadorDisponible({ env = process.env, platform = process.platform } = {}) {
+  for (const candidato of candidatos({ env, platform })) {
     try {
       if (fs.statSync(candidato.ruta).isFile()) return candidato;
     } catch { /* no está */ }

@@ -83,13 +83,19 @@ test('hayEntornoGrafico distingue equipos con pantalla de servidores', () => {
 });
 
 test('sin navegador instalado se avisa y se abre igual', () => {
-  const guardado = process.env.NEBULA_NAVEGADOR;
-  process.env.NEBULA_NAVEGADOR = path.join(base, 'no-existe');
-  try {
-    /* se evita lanzar procesos reales: basta comprobar que no encuentra navegador */
-    const encontrado = navegadorDisponible();
-    assert.equal(encontrado, null, 'no hay navegador disponible');
-  } finally {
-    process.env.NEBULA_NAVEGADOR = guardado;
-  }
+  /* se le pasa un entorno controlado: en los servidores de integración sí hay
+     navegador instalado, y la búsqueda no debe depender de eso */
+  const env = { PATH: '', NEBULA_NAVEGADOR: path.join(base, 'no-existe') };
+  assert.equal(navegadorDisponible({ env, platform: 'linux' }), null, 'no hay navegador disponible');
+  assert.equal(navegadorDisponible({ env, platform: 'darwin' }), null);
+});
+
+test('se encuentra Chrome buscando en el PATH indicado', () => {
+  const carpeta = path.join(base, 'bin');
+  fs.mkdirSync(carpeta, { recursive: true });
+  const chrome = path.join(carpeta, 'google-chrome-stable');
+  fs.writeFileSync(chrome, '#!/bin/sh\n', { mode: 0o755 });
+  const encontrado = navegadorDisponible({ env: { PATH: carpeta }, platform: 'linux' });
+  assert.equal(encontrado?.nombre, 'google-chrome-stable');
+  assert.equal(encontrado?.ruta, chrome);
 });
