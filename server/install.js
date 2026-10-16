@@ -18,6 +18,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { VERSION } from './version.js';
+import { argumentos, argumentosVbs, cabeceraVbs } from './powershell.js';
 
 export const NOMBRE = 'Nebula';          /* carpeta y ejecutable, sin tildes */
 export const NOMBRE_VISIBLE = 'Nébula';  /* lo que se ve en Windows */
@@ -100,6 +101,47 @@ export function scriptBorrarAccesosDirectos() {
   ].join('\n');
 }
 
+/**
+ * Los mismos accesos directos, pero con VBScript (respaldo de PowerShell).
+ * Las comillas se escriben con Chr(34) para no pelearse con el escapado.
+ */
+export function scriptAccesosDirectosVbs(rutas) {
+  const wscript = '%SystemRoot%\\System32\\wscript.exe';
+  return [
+    cabeceraVbs(),
+    'Dim bases, base, lnk',
+    `bases = Array("${rutas.menu}", "${rutas.escritorio}")`,
+    'For Each base In bases',
+    '  If fso.FolderExists(base) Then',
+    `    Set lnk = shell.CreateShortcut(fso.BuildPath(base, "${NOMBRE}.lnk"))`,
+    `    lnk.TargetPath = "${wscript}"`,
+    `    lnk.Arguments = Chr(34) & "${rutas.lanzadorOculto}" & Chr(34)`,
+    `    lnk.WorkingDirectory = "${rutas.dir}"`,
+    `    lnk.IconLocation = "${rutas.exe},0"`,
+    '    lnk.Description = "Biblioteca de juegos"',
+    '    lnk.Save',
+    '  End If',
+    'Next',
+    '',
+  ].join('\r\n');
+}
+
+/** Borrado de los accesos directos con VBScript. */
+export function scriptBorrarAccesosDirectosVbs() {
+  return [
+    cabeceraVbs(),
+    'Dim bases, base, lnk',
+    'bases = Array(shell.SpecialFolders("Programs"), shell.SpecialFolders("Desktop"))',
+    'For Each base In bases',
+    '  If Len(base) > 0 Then',
+    `    lnk = fso.BuildPath(base, "${NOMBRE}.lnk")`,
+    '    If fso.FileExists(lnk) Then fso.DeleteFile lnk, True',
+    '  End If',
+    'Next',
+    '',
+  ].join('\r\n');
+}
+
 /** Argumentos de reg.exe para registrar el programa en "Aplicaciones instaladas". */
 export function argumentosRegistro(rutas, datos = {}) {
   const v = datos.version || version();
@@ -148,7 +190,75 @@ function ejecutar(comando, args, { silencioso = false } = {}) {
 }
 
 function powershell(script) {
-  ejecutar('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script], { silencioso: true });
+  ejecutar('powershell.exe', argumentos(script), { silencioso: true });
+}
+
+/* ------------------------------------------------------------ registro de pasos
+   Se deja constancia de la instalación en un archivo de texto: cuando algo falla
+   (o cuando la instalación se hace sin consola, desde el instalador silencioso)
+   es lo único que permite saber qué pasó. Nunca interrumpe la instalación. */
+
+export const RUTA_REGISTRO = path.join(os.tmpdir(), 'Nebula-instalacion.log');
+
+function registrar(mensaje) {
+  const linea = `${new Date().toISOString()}  ${mensaje}\r\n`;
+  try {
+    fs.appendFileSync(RUTA_REGISTRO, linea, 'utf8');
+  } catch { /* si no se puede escribir, da igual */ }
+}
+
+/** Vacía el registro al empezar una instalación o desinstalación. */
+function abrirRegistro(titulo) {
+  try {
+    fs.writeFileSync(RUTA_REGISTRO, `${titulo} - ${new Date().toISOString()}\r\n`, 'utf8');
+  } catch { /* sin registro */ }
+}
+
+/**
+ * Ejecuta un script de VBScript sin ventanas.
+ * Se usa como respaldo de PowerShell: si por lo que sea PowerShell no está o no
+ * deja crear el acceso directo, WScript hace lo mismo desde siempre.
+ */
+function ejecutarVbs(contenido, { silencioso = true } = {}) {
+  const archivo = path.join(os.tmpdir(), `nebula-${process.pid}-${Date.now()}.vbs`);
+  fs.writeFileSync(archivo, contenido, 'latin1');
+  try {
+    return ejecutar('wscript.exe', argumentosVbs(archivo), { silencioso });
+  } finally {
+    try { fs.rmSync(archivo, { force: true }); } catch { /* nada */ }
+  }
+}
+
+/**
+ * Crea los accesos directos del menú Inicio y del escritorio.
+ * Primero con PowerShell y, si falla, con VBScript; se anota cuál funcionó.
+ */
+export function crearAccesosDirectos(rutas, { silencioso = false } = {}) {
+  try {
+    powershell(scriptAccesosDirectos(rutas));
+    registrar('accesos directos creados con PowerShell');
+    return 'powershell';
+  } catch (err) {
+    registrar(`PowerShell no pudo crear los accesos directos: ${err.message}`);
+    if (!silencioso) escribir('  Aviso: PowerShell no pudo crear los accesos directos; se intenta por VBScript');
+  }
+  ejecutarVbs(scriptAccesosDirectosVbs(rutas));
+  registrar('accesos directos creados con VBScript');
+  return 'vbs';
+}
+
+/** Quita los accesos directos; igual que al crearlos, con respaldo. */
+export function quitarAccesosDirectos({ silencioso = false } = {}) {
+  try {
+    powershell(scriptBorrarAccesosDirectos());
+    registrar('accesos directos eliminados con PowerShell');
+    return 'powershell';
+  } catch (err) {
+    registrar(`PowerShell no pudo quitar los accesos directos: ${err.message}`);
+  }
+  ejecutarVbs(scriptBorrarAccesosDirectosVbs());
+  registrar('accesos directos eliminados con VBScript');
+  return 'vbs';
 }
 
 function carpetaSizeKb(dir) {
@@ -202,40 +312,55 @@ const escribir = (texto) => process.stdout.write(`${texto}\n`);
  * @param {boolean} opciones.abrirAlTerminar  Abrir la app cuando termine
  */
 export async function instalar({ origen = process.execPath, silencioso = false, abrirAlTerminar = true, rutas = rutasInstalacion() } = {}) {
-  if (rutas.platform !== 'win32' || process.platform !== 'win32') {
-    throw new Error('El instalador es para Windows. En este sistema usa el programa directamente.');
-  }
-  if (!fs.existsSync(origen)) throw new Error(`No se encuentra el instalador: ${origen}`);
-
-  if (!silencioso) escribir(`\n  Instalando ${NOMBRE} ${version()}…\n`);
-  fs.mkdirSync(rutas.dir, { recursive: true });
-
-  /* 1. el programa: una copia del propio instalador */
-  const destino = rutas.exe;
-  if (path.resolve(origen).toLowerCase() !== path.resolve(destino).toLowerCase()) {
-    fs.copyFileSync(origen, destino);
-    if (!silencioso) escribir(`  Programa:  ${rutas.dir}`);
-  }
-
-  /* 2. lanzador de consola (opcional) y lanzador oculto que usan los accesos directos */
-  const lanzador = `@echo off\r\ntitle ${NOMBRE_VISIBLE}\r\ncd /d "%~dp0"\r\n${NOMBRE}.exe %*\r\n`;
-  fs.writeFileSync(rutas.lanzador, lanzador, 'latin1');
-  fs.writeFileSync(rutas.lanzadorOculto, lanzadorOculto(), 'latin1');
-
-  /* 3. accesos directos en el menú Inicio y en el escritorio */
+  abrirRegistro(`Instalación de ${NOMBRE_VISIBLE} ${version()}`);
+  registrar(`instalador: ${origen}`);
+  registrar(`destino:    ${rutas.dir}`);
   try {
-    powershell(scriptAccesosDirectos(rutas));
-    if (!silencioso) escribir('  Accesos directos: menú Inicio y escritorio');
-  } catch (err) {
-    if (!silencioso) escribir(`  Aviso: no se pudieron crear los accesos directos (${err.message})`);
-  }
+    if (rutas.platform !== 'win32' || process.platform !== 'win32') {
+      throw new Error('El instalador es para Windows. En este sistema usa el programa directamente.');
+    }
+    if (!fs.existsSync(origen)) throw new Error(`No se encuentra el instalador: ${origen}`);
 
-  /* 4. registro en "Aplicaciones instaladas" */
-  try {
-    ejecutar('reg.exe', argumentosRegistro(rutas, { version: version(), tamanoKb: carpetaSizeKb(rutas.dir) }), { silencioso: true });
-    if (!silencioso) escribir('  Aparecerá en Aplicaciones instaladas para poder quitarlo');
+    if (!silencioso) escribir(`\n  Instalando ${NOMBRE} ${version()}…\n`);
+    fs.mkdirSync(rutas.dir, { recursive: true });
+
+    /* 1. el programa: una copia del propio instalador */
+    const destino = rutas.exe;
+    if (path.resolve(origen).toLowerCase() !== path.resolve(destino).toLowerCase()) {
+      fs.copyFileSync(origen, destino);
+      registrar(`programa copiado (${fs.statSync(destino).size} bytes)`);
+      if (!silencioso) escribir(`  Programa:  ${rutas.dir}`);
+    } else {
+      registrar('ya se está ejecutando desde la carpeta de instalación: no se copia');
+    }
+
+    /* 2. lanzador de consola (opcional) y lanzador oculto que usan los accesos directos */
+    const lanzador = `@echo off\r\ntitle ${NOMBRE_VISIBLE}\r\ncd /d "%~dp0"\r\n${NOMBRE}.exe %*\r\n`;
+    fs.writeFileSync(rutas.lanzador, lanzador, 'latin1');
+    fs.writeFileSync(rutas.lanzadorOculto, lanzadorOculto(), 'latin1');
+    registrar('lanzadores escritos (consola y oculto)');
+
+    /* 3. accesos directos en el menú Inicio y en el escritorio */
+    try {
+      const metodo = crearAccesosDirectos(rutas, { silencioso });
+      if (!silencioso) escribir(`  Accesos directos: menú Inicio y escritorio (${metodo})`);
+    } catch (err) {
+      registrar(`ERROR en los accesos directos: ${err.message}`);
+      if (!silencioso) escribir(`  Aviso: no se pudieron crear los accesos directos (${err.message})`);
+    }
+
+    /* 4. registro en "Aplicaciones instaladas" */
+    try {
+      const resultado = ejecutar('reg.exe', argumentosRegistro(rutas, { version: version(), tamanoKb: carpetaSizeKb(rutas.dir) }), { silencioso: true });
+      registrar(`registro escrito en "Aplicaciones instaladas" (reg.exe ${resultado.status})`);
+      if (!silencioso) escribir('  Aparecerá en Aplicaciones instaladas para poder quitarlo');
+    } catch (err) {
+      registrar(`ERROR en el registro: ${err.message}`);
+      if (!silencioso) escribir(`  Aviso: no se pudo registrar la desinstalación (${err.message})`);
+    }
   } catch (err) {
-    if (!silencioso) escribir(`  Aviso: no se pudo registrar la desinstalación (${err.message})`);
+    registrar(`ERROR: ${err.message}`);
+    throw err;
   }
 
   if (!silencioso) {
@@ -243,10 +368,9 @@ export async function instalar({ origen = process.execPath, silencioso = false, 
     escribir(`\n  Listo. Abre «${NOMBRE_VISIBLE}» desde el menú Inicio o el escritorio.\n`);
   }
 
+  registrar('instalación terminada');
   if (abrirAlTerminar && !silencioso) {
     if (preguntar(NOMBRE_VISIBLE, `${NOMBRE_VISIBLE} ${version()} se instaló correctamente.\\n\\n¿Quieres abrirla ahora?`)) abrir(rutas);
-  } else if (abrirAlTerminar) {
-    abrir(rutas);
   }
   return rutas;
 }
@@ -256,24 +380,32 @@ export async function instalar({ origen = process.execPath, silencioso = false, 
  * Los datos del usuario (%APPDATA%\Nébula) se conservan salvo que se pida lo contrario.
  */
 export async function desinstalar({ silencioso = false, borrarDatos = false, rutas = rutasInstalacion() } = {}) {
+  abrirRegistro(`Desinstalación de ${NOMBRE_VISIBLE} ${version()}`);
+  registrar(`carpeta: ${rutas.dir}`);
   if (rutas.platform !== 'win32' || process.platform !== 'win32') {
     throw new Error('La desinstalación es para Windows.');
   }
   if (!silencioso) escribir(`\n  Quitando ${NOMBRE_VISIBLE}…\n`);
 
   try {
-    powershell(scriptBorrarAccesosDirectos());
+    quitarAccesosDirectos({ silencioso });
     if (!silencioso) escribir('  Accesos directos eliminados');
-  } catch { /* si no estaban, da igual */ }
+  } catch (err) {
+    registrar(`ERROR en los accesos directos: ${err.message}`);
+  }
 
   try {
     fs.rmSync(rutas.lanzadorOculto, { force: true });
+    registrar('lanzador oculto eliminado');
   } catch { /* ya no estaba */ }
 
   try {
     ejecutar('reg.exe', argumentosBorrarRegistro(rutas), { silencioso: true });
+    registrar('registro de desinstalación eliminado');
     if (!silencioso) escribir('  Registro de desinstalación eliminado');
-  } catch { /* si no estaba, da igual */ }
+  } catch (err) {
+    registrar(`aviso del registro: ${err.message}`);
+  }
 
   if (borrarDatos && fs.existsSync(rutas.datos)) {
     try {
@@ -289,6 +421,7 @@ export async function desinstalar({ silencioso = false, borrarDatos = false, rut
   const orden = `ping -n 3 127.0.0.1 >nul & rmdir /s /q "${carpeta}" & ping -n 3 127.0.0.1 >nul & rmdir /s /q "${carpeta}"`;
   try {
     spawn('cmd.exe', ['/d', '/s', '/c', orden], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+    registrar('borrado de la carpeta encargado a cmd.exe (unos 5 segundos)');
     if (!silencioso) escribir('  Programa eliminado (la carpeta se borra al cerrar)');
   } catch (err) {
     if (!silencioso) escribir(`  Aviso: no se pudo programar el borrado (${err.message})`);
@@ -301,4 +434,4 @@ export async function desinstalar({ silencioso = false, borrarDatos = false, rut
   return true;
 }
 
-export { mostrarAviso };
+export { mostrarAviso, registrar as anotar };

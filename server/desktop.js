@@ -17,6 +17,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { USER_AGENT } from './http.js';
+import { argumentos } from './powershell.js';
 
 /** Perfil propio de la ventana: al cerrarla no queda nada abierto. */
 function perfilVentana() {
@@ -151,7 +152,7 @@ function abrirWebViewWindows(url) {
       $w.Content = $b
       $w.ShowDialog() | Out-Null
     } catch { exit 1 }`;
-  const resultado = lanzar('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true });
+  const resultado = lanzar('powershell.exe', argumentos(script), { windowsHide: true });
   if (resultado.ok) return { ok: true, modo: 'ventana', detalle: 'ventana de Windows (WebView)' };
   return { ok: false, modo: 'ninguno', detalle: resultado.problema?.message || 'sin WebView' };
 }
@@ -225,7 +226,7 @@ export function avisar(titulo, texto, { forzar = false } = {}) {
     const script = `
       Add-Type -AssemblyName PresentationFramework
       [System.Windows.MessageBox]::Show("${limpiar(texto)}", "${limpiar(titulo)}", "OK", "Information") | Out-Null`;
-    const resultado = lanzar('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true });
+    const resultado = lanzar('powershell.exe', argumentos(script), { windowsHide: true });
     if (resultado.ok) return true;
   }
   if (forzar || process.stdout.isTTY) process.stderr.write(`\n  ${titulo}: ${texto}\n`);

@@ -107,35 +107,56 @@ jobs:
       - name: Instalar, comprobar y desinstalar
         shell: pwsh
         run: |
-          $programa = Join-Path $env:LOCALAPPDATA 'Programs\Nebula'
-          $acceso   = Join-Path ([Environment]::GetFolderPath('Programs')) 'Nebula.lnk'
-          $clave    = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Nebula'
+          $programa   = Join-Path $env:LOCALAPPDATA 'Programs\Nebula'
+          $menu       = [Environment]::GetFolderPath('Programs')
+          $acceso     = Join-Path $menu 'Nebula.lnk'
+          $escritorio = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Nebula.lnk'
+          $clave      = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Nebula'
+          $registro   = Join-Path $env:TEMP 'Nebula-instalacion.log'
+          $salida     = Join-Path $env:TEMP 'instalador.log'
+          $errores    = Join-Path $env:TEMP 'instalador.err'
+
+          function Fallo([string]$motivo) {
+            Write-Host "::error::$motivo"
+            Write-Host '--- salida del instalador ---'
+            Get-Content $salida, $errores -ErrorAction SilentlyContinue | Write-Host
+            Write-Host '--- registro de la instalacion ---'
+            Get-Content $registro -ErrorAction SilentlyContinue | Write-Host
+            Write-Host '--- carpeta del programa ---'
+            Get-ChildItem $programa -ErrorAction SilentlyContinue | Format-Table Name, Length | Out-String | Write-Host
+            Write-Host '--- accesos directos ---'
+            Get-ChildItem $acceso, $escritorio -ErrorAction SilentlyContinue | Format-Table FullName | Out-String | Write-Host
+            throw $motivo
+          }
 
           Write-Host '== Instalando en silencio =='
-          $instalador = Start-Process -FilePath "dist/Nebula-Instalador.exe" -ArgumentList '--silent' -PassThru -Wait
+          $instalador = Start-Process -FilePath "dist/Nebula-Instalador.exe" -ArgumentList '--silent' -PassThru -Wait `
+            -RedirectStandardOutput $salida -RedirectStandardError $errores
+          Write-Host ("El instalador termino con codigo {0}" -f $instalador.ExitCode)
+          Get-Content $salida, $errores -ErrorAction SilentlyContinue | Write-Host
           Start-Sleep -Seconds 3
 
-          if (-not (Test-Path (Join-Path $programa 'Nebula.exe'))) { throw 'No se copio el programa' }
+          if (-not (Test-Path (Join-Path $programa 'Nebula.exe'))) { Fallo 'No se copio el programa' }
           Write-Host ("Programa instalado en {0}" -f $programa)
 
-          if (-not (Test-Path $acceso)) { throw 'No se creo el acceso directo del menu Inicio' }
+          if (-not (Test-Path $acceso)) { Fallo 'No se creo el acceso directo del menu Inicio' }
           Write-Host 'Acceso directo del menu Inicio: correcto'
 
           $lanzador = Join-Path $programa 'Nebula.vbs'
-          if (-not (Test-Path $lanzador)) { throw 'Falta el lanzador sin consola' }
+          if (-not (Test-Path $lanzador)) { Fallo 'Falta el lanzador sin consola' }
           $atajo = (New-Object -ComObject WScript.Shell).CreateShortcut($acceso)
           Write-Host ("Acceso directo: {0} {1}" -f $atajo.TargetPath, $atajo.Arguments)
-          if ($atajo.TargetPath -notmatch 'wscript') { throw 'El acceso directo deberia abrir el programa sin consola' }
-          if ($atajo.Arguments -notmatch 'Nebula\.vbs') { throw 'El acceso directo deberia usar el lanzador oculto' }
+          if ($atajo.TargetPath -notmatch 'wscript') { Fallo 'El acceso directo deberia abrir el programa sin consola' }
+          if ($atajo.Arguments -notmatch 'Nebula\.vbs') { Fallo 'El acceso directo deberia usar el lanzador oculto' }
           Add-Type -AssemblyName System.Drawing
           $icono = [System.Drawing.Icon]::ExtractAssociatedIcon((Join-Path $programa 'Nebula.exe'))
-          if (-not $icono) { throw 'El ejecutable no tiene icono propio' }
+          if (-not $icono) { Fallo 'El ejecutable no tiene icono propio' }
           Write-Host ("Icono del programa: {0}x{1}" -f $icono.Width, $icono.Height)
 
-          if (-not (Test-Path $clave)) { throw 'No se registro en Aplicaciones instaladas' }
-          $registro = Get-ItemProperty $clave
-          Write-Host ("Registro: {0} {1}" -f $registro.DisplayName, $registro.DisplayVersion)
-          if ($registro.UninstallString -notmatch '--uninstall') { throw 'La orden de desinstalacion no es correcta' }
+          if (-not (Test-Path $clave)) { Fallo 'No se registro en Aplicaciones instaladas' }
+          $datos = Get-ItemProperty $clave
+          Write-Host ("Registro: {0} {1}" -f $datos.DisplayName, $datos.DisplayVersion)
+          if ($datos.UninstallString -notmatch '--uninstall') { Fallo 'La orden de desinstalacion no es correcta' }
 
           Write-Host '== Abriendo el programa instalado =='
           $app = Start-Process -FilePath (Join-Path $programa 'Nebula.exe') `
@@ -152,18 +173,18 @@ jobs:
             }
             if (-not $ok) {
               Get-Content "$env:TEMP\instalada.log", "$env:TEMP\instalada.err" -ErrorAction SilentlyContinue | Write-Host
-              throw 'La copia instalada no arranco'
+              Fallo 'La copia instalada no arranco'
             }
             Write-Host 'La copia instalada arranca y responde'
           } finally {
             Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 2
           }
 
           Write-Host '== Comprobando el modo ventana =='
-          $log = "$env:TEMP\ventana.log"
           $app2 = Start-Process -FilePath (Join-Path $programa 'Nebula.exe') `
             -ArgumentList @('--port', '4396', '--host', '127.0.0.1', '--data-dir', "$env:TEMP\nebula-ventana", '--demo', '--open') `
-            -PassThru -RedirectStandardOutput $log -RedirectStandardError "$env:TEMP\ventana.err"
+            -PassThru -RedirectStandardOutput "$env:TEMP\ventana.log" -RedirectStandardError "$env:TEMP\ventana.err"
           try {
             foreach ($i in 1..20) {
               Start-Sleep -Seconds 1
@@ -181,17 +202,24 @@ jobs:
           } catch {
             Write-Host "::warning::La comprobacion del modo ventana no se pudo completar: $_"
           } finally {
-            Get-Content $log -ErrorAction SilentlyContinue | Where-Object { $_ -match 'Ventana|Aviso|navegador' } | Write-Host
+            Get-Content "$env:TEMP\ventana.log", "$env:TEMP\ventana.err" -ErrorAction SilentlyContinue | Where-Object { $_ -match 'Ventana|Aviso|navegador' } | Write-Host
             Stop-Process -Id $app2.Id -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 2
           }
 
           Write-Host '== Desinstalando =='
-          Start-Process -FilePath (Join-Path $programa 'Nebula.exe') -ArgumentList '--uninstall', '--silent' -Wait
-          Start-Sleep -Seconds 6
+          $quitar = Start-Process -FilePath (Join-Path $programa 'Nebula.exe') -ArgumentList '--uninstall', '--silent' -PassThru -Wait `
+            -RedirectStandardOutput "$env:TEMP\desinstalar.log" -RedirectStandardError "$env:TEMP\desinstalar.err"
+          Write-Host ("La desinstalacion termino con codigo {0}" -f $quitar.ExitCode)
+          Get-Content "$env:TEMP\desinstalar.log", "$env:TEMP\desinstalar.err" -ErrorAction SilentlyContinue | Write-Host
+          Start-Sleep -Seconds 12
 
-          if (Test-Path $acceso) { throw 'El acceso directo sigue ahi' }
-          if (Test-Path $clave) { throw 'El registro sigue ahi' }
-          if (Test-Path $programa) { throw 'La carpeta del programa sigue ahi' }
+          if (Test-Path $acceso) { Fallo 'El acceso directo sigue ahi' }
+          if (Test-Path $clave) { Fallo 'El registro sigue ahi' }
+          if (Test-Path $programa) {
+            Get-ChildItem $programa -Recurse -ErrorAction SilentlyContinue | Format-Table FullName | Out-String | Write-Host
+            Fallo 'La carpeta del programa sigue ahi'
+          }
           Write-Host 'Desinstalacion limpia: sin accesos, sin registro y sin carpeta'
 
       - name: Preparar los archivos de descarga

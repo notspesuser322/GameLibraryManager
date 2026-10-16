@@ -11,7 +11,7 @@
  * mantener ni versiones que se descuadren.
  */
 import '../server/sea.js'; /* primero se preparan los archivos incrustados */
-import { instalar, desinstalar, esModoInstalado, rutasInstalacion, version } from '../server/install.js';
+import { instalar, desinstalar, esModoInstalado, rutasInstalacion, version, anotar } from '../server/install.js';
 
 const args = process.argv.slice(2);
 const tiene = (nombre) => args.includes(nombre);
@@ -55,6 +55,7 @@ Una vez instalado, se usa el programa desde el menu Inicio o el escritorio.`);
 }
 
 principal().catch((err) => {
+  anotar(`ERROR: no se pudo completar la instalación: ${err.message}`);
   console.error(`\n  No se pudo completar: ${err.message}\n`);
   process.exitCode = 1;
 });
