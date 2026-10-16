@@ -5,6 +5,7 @@ import {
   esc, openModal, toast, confirmDialog, downloadText, pickFile, promptDialog, relTime, fmtDate,
 } from '../util.js';
 import { openFolderWizard, openFileBrowser } from './scan.js';
+import { metadataSettingsHtml, wireMetadataSettings, METADATA_CSS } from './metadata.js';
 
 const ACCENTS = ['#7c5cff', '#4f8cff', '#22c1a5', '#ff7847', '#ff4d9d', '#f4b942', '#59c2ff', '#a06cd5'];
 
@@ -105,6 +106,11 @@ export function renderSettings(root) {
       <p class="tiny muted">Marcadores disponibles en el comando: <code>{rom}</code> <code>{romDir}</code> <code>{romName}</code> <code>{name}</code> <code>{dir}</code> <code>{exe}</code></p>
     </div>
 
+    <div class="section-title"><h2>Metadatos</h2></div>
+    <div class="panel" data-metadata-settings>
+      ${metadataSettingsHtml(settings)}
+    </div>
+
     <div class="section-title"><h2>Datos</h2></div>
     <div class="panel">
       <div class="inline-actions">
@@ -136,8 +142,18 @@ export function renderSettings(root) {
   wire(root);
 }
 
+function ensureStyles() {
+  if (document.getElementById('metadata-css')) return;
+  const tag = document.createElement('style');
+  tag.id = 'metadata-css';
+  tag.textContent = METADATA_CSS;
+  document.head.append(tag);
+}
+
 function wire(root) {
-  root.querySelectorAll('[data-source]').forEach((input) => {
+  ensureStyles();
+  wireMetadataSettings(root);
+  root.querySelectorAll('[data-setting]').forEach((input) => {
     input.addEventListener('change', async () => {
       const sources = { ...(state.settings.sources || {}) };
       sources[input.dataset.source] = input.checked;
@@ -147,10 +163,24 @@ function wire(root) {
   });
 
   root.querySelectorAll('[data-setting]').forEach((input) => {
+    const path = input.dataset.setting;
+    if (path.includes('.')) return; /* los ajustes anidados se manejan aparte */
     input.addEventListener('change', async () => {
-      state.settings[input.dataset.setting] = input.checked;
-      await api.saveSettings({ [input.dataset.setting]: input.checked });
+      state.settings[path] = input.checked;
+      await api.saveSettings({ [path]: input.checked });
       toast('Ajuste guardado', { type: 'ok' });
+    });
+  });
+
+  /* ajustes de metadatos (metadata.enabled, metadata.language, …) */
+  root.querySelectorAll('[data-setting^="metadata."]').forEach((input) => {
+    const key = input.dataset.setting.split('.')[1];
+    input.addEventListener('change', async () => {
+      const value = input.type === 'checkbox' ? input.checked
+        : input.type === 'range' ? Number(input.value)
+        : input.value;
+      state.settings.metadata = { ...(state.settings.metadata || {}), [key]: value };
+      await api.saveSettings({ metadata: { [key]: value } });
     });
   });
 

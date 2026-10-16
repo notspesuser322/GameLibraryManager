@@ -10,6 +10,7 @@ import {
   addPlaytime, deleteGame, detectArt, launchGame, openStore, resetArt, revealGame,
   setStatus, stopGame, toggleFavorite, uploadArt,
 } from '../actions.js';
+import { renderMetadataPanel, wireMetadataPanel } from './metadata.js';
 
 let currentTab = 'resumen';
 
@@ -125,6 +126,9 @@ export function openGameDetail(gameId, { tab = 'resumen' } = {}) {
       await uploadArt(current.id, 'cover', event.dataTransfer.files[0]);
       rerender();
     });
+
+    /* panel de metadatos (solo aparece en su pestaña) */
+    if (scope.body.querySelector('.metadata-panel')) wireMetadataPanel(scope.body, current, rerender);
   }
 
   wire(modal, game);
@@ -169,18 +173,24 @@ function renderDetail(game) {
           <button class="btn ghost" data-act="reveal" ${game.installDir ? '' : 'disabled'}>Abrir carpeta</button>
           <button class="btn ghost" data-act="store">Tienda</button>
           <button class="btn ghost" data-act="detect-art">Buscar imágenes</button>
+          <button class="btn ghost" data-act="metadatos">Buscar ficha en internet</button>
           <button class="btn ghost" data-act="delete">Quitar</button>
         </div>
       </div>
     </div>
     <div class="tabs">
-      ${['resumen', 'sesiones', 'editar', 'imagenes'].map((tab) => `
-        <button data-tab="${tab}" class="${currentTab === tab ? 'active' : ''}">${tab === 'resumen' ? 'Resumen' : tab === 'sesiones' ? 'Sesiones' : tab === 'editar' ? 'Editar' : 'Imágenes'}</button>`).join('')}
+      ${['resumen', 'metadatos', 'sesiones', 'editar', 'imagenes'].map((tab) => `
+        <button data-tab="${tab}" class="${currentTab === tab ? 'active' : ''}">${
+          tab === 'resumen' ? 'Resumen'
+          : tab === 'metadatos' ? 'Metadatos'
+          : tab === 'sesiones' ? 'Sesiones'
+          : tab === 'editar' ? 'Editar' : 'Imágenes'}</button>`).join('')}
     </div>
     <div class="tab-panel">${renderTab(game, running)}</div>`;
 }
 
 function renderTab(game, running) {
+  if (currentTab === 'metadatos') return renderMetadataPanel(game, () => {});
   if (currentTab === 'sesiones') return renderSessions(game);
   if (currentTab === 'editar') return renderEdit(game);
   if (currentTab === 'imagenes') return renderImages(game);
@@ -350,6 +360,10 @@ async function handleAction(action, game, rerender, modal, data = {}) {
       break;
     case 'detect-art':
       await detectArt(game.id);
+      rerender();
+      break;
+    case 'metadatos':
+      currentTab = 'metadatos';
       rerender();
       break;
     case 'playtime':

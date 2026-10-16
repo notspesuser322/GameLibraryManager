@@ -55,6 +55,15 @@ function defaultSettings() {
     closeLauncher: false,
     /* descarga (una sola vez) las carátulas oficiales desde el CDN de la tienda */
     fetchRemoteArt: true,
+    /* búsqueda de metadatos en fuentes abiertas (Wikipedia, Wikidata, Steam…) */
+    metadata: {
+      enabled: true,
+      language: 'es',
+      providers: { steam: true, wikipedia: true, wikidata: true, rawg: false },
+      rawgKey: '',
+      autoFillOnScan: false,
+      minScore: 0.5,
+    },
     view: {
       mode: 'grid',
       sort: 'name',
@@ -120,6 +129,11 @@ export class Store extends EventEmitter {
         sources: { ...base.settings.sources, ...(raw.settings?.sources || {}) },
         view: { ...base.settings.view, ...(raw.settings?.view || {}) },
         theme: { ...base.settings.theme, ...(raw.settings?.theme || {}) },
+        metadata: {
+          ...base.settings.metadata,
+          ...(raw.settings?.metadata || {}),
+          providers: { ...base.settings.metadata.providers, ...(raw.settings?.metadata?.providers || {}) },
+        },
         scanRoots: Array.isArray(raw.settings?.scanRoots) ? raw.settings.scanRoots : [],
         emulatorProfiles: Array.isArray(raw.settings?.emulatorProfiles) ? raw.settings.emulatorProfiles : [],
       },
@@ -289,6 +303,10 @@ export class Store extends EventEmitter {
     if (patch.sources) patch.sources = { ...s.sources, ...patch.sources };
     if (patch.view) patch.view = { ...s.view, ...patch.view };
     if (patch.theme) patch.theme = { ...s.theme, ...patch.theme };
+    if (patch.metadata) {
+      const { providers, ...rest } = patch.metadata;
+      patch.metadata = { ...s.metadata, ...rest, ...(providers ? { providers: { ...s.metadata.providers, ...providers } } : {}) };
+    }
     Object.assign(s, patch);
     this.scheduleSave();
     return s;

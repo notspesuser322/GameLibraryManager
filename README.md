@@ -8,7 +8,8 @@ Proyecto propio, pensado para uso personal y privado. Funciona **sin dependencia
 externas**: solo necesita Node.js. No hay cuentas, ni nube, ni telemetría.
 
 ```
-npm start          →  http://localhost:4337
+Ludoteca.exe       →  doble clic; abre el navegador con tu biblioteca
+npm start          →  http://localhost:4337 (si prefieres ejecutarlo desde el código)
 ```
 
 ---
@@ -40,18 +41,41 @@ npm start          →  http://localhost:4337
 
 ## Puesta en marcha
 
+### En Windows, con el ejecutable (nada que instalar)
+
+Descarga **`Ludoteca.exe`** (o el ZIP con el LEEME) y haz doble clic. Lleva dentro todo lo
+necesario: no hace falta instalar Node ni nada más.
+
+- Los ejecutables se generan solos en cada `push` mediante GitHub Actions: abre la pestaña
+  **Actions → Construir ejecutable → última ejecución → Artifacts** y descarga
+  `ludoteca-windows.zip` (también hay una versión para Linux).
+- Al abrirlo por primera vez se crea la carpeta de datos en tu usuario
+  (`%APPDATA%\Ludoteca`) y se abre el navegador en `http://localhost:4337`.
+- Sirve el mismo comando para la terminal: `Ludoteca.exe --port 4400 --demo`.
+
+### Desde el código (Windows, macOS o Linux)
+
 ```bash
 npm start                  # inicia en http://localhost:4337
 npm start -- --open        # además abre el navegador
 npm start -- --port 5000   # otro puerto
 npm run demo               # arranca con una biblioteca de ejemplo (40 juegos ficticios)
 
-npm test                   # ejecuta la batería de pruebas (48 pruebas)
+npm test                   # ejecuta la batería de pruebas (66 pruebas)
 ```
 
-Sin consola: en Windows haz doble clic en **`iniciar.bat`**; en macOS/Linux ejecuta
-**`./iniciar.sh`**. Ambos comprueban que Node esté instalado, arrancan la app y abren el
-navegador (el script acepta los mismos argumentos: `./iniciar.sh --demo --port 5000`).
+También están **`iniciar.bat`** (Windows) e **`iniciar.sh`** (macOS/Linux) como atajo:
+comprueban que Node esté instalado, arrancan la app y abren el navegador
+(`./iniciar.sh --demo --port 5000`).
+
+### Construir el ejecutable tú mismo
+
+```bash
+npm install --no-save esbuild postject
+node scripts/build-sea.mjs --runtime "$(command -v node)" --out dist/Ludoteca.exe
+```
+
+El resultado es un único archivo con el servidor, la interfaz y la documentación dentro.
 
 Opciones de línea de comandos:
 
@@ -62,6 +86,8 @@ Opciones de línea de comandos:
 | `--data-dir <dir>` | Carpeta de datos (por defecto `./data`) |
 | `--demo` | Carga la biblioteca de ejemplo al iniciar |
 | `--open` | Abre el navegador automáticamente |
+| `--no-open` | No abre el navegador |
+| `--version`, `-v` | Muestra la versión y termina |
 
 ### Guía rápida (2 minutos)
 
@@ -147,13 +173,40 @@ Orden de prioridad para cada juego:
 3. Descarga desde el CDN de la tienda (solo Steam; **se puede desactivar** en Ajustes).
 4. Carátula SVG generada: color derivado del nombre, patrón propio, plataforma y título.
 
+## Metadatos automáticos
+
+Pensado para lo que no está en ninguna tienda: **Minecraft lanzado con HMCL**, juegos emulados,
+programas sueltos, betas, itch.io… En la ficha de cada juego hay una pestaña **Metadatos** con
+un buscador que rellena descripción, géneros, etiquetas, desarrollador, editorial, fecha, nota
+de crítica y **carátula**.
+
+- Fuentes abiertas y sin cuenta: **Wikipedia** (en tu idioma, con respaldo en inglés),
+  **Wikidata** (datos estructurados: desarrollador, editorial, fecha, imagen) y **Steam**.
+  Si pegas una clave gratuita de RAWG en Ajustes, también se consulta RAWG.
+- No se usa Google: su API es de pago y sus términos no permiten consultas automatizadas; los
+  resultados por nombre de juego son ambiguos, mientras que Wikipedia/Wikidata sí distinguen
+  videojuegos y ofrecen datos limpios.
+- Cada resultado muestra de qué fuente viene y un porcentaje de parecido con el nombre buscado.
+  Las coincidencias dudosas (una empresa, un artículo que no es un videojuego) se marcan y bajan
+  de puesto.
+- **Nunca pisa lo que escribiste** salvo que actives *Sobrescribir*; por defecto solo rellena
+  campos vacíos y puedes desmarcar los que no quieras.
+- Botones relacionados en **Ajustes → Metadatos**: *Comprobar fuentes* (mide si responden y
+  cuánto tardan) y *Rellenar huecos automáticamente* (hasta 8 juegos sin descripción o carátula).
+  También se puede pedir el relleno automático al agregar juegos nuevos.
+- Si no hay internet, la búsqueda lo dice y la biblioteca sigue funcionando igual: las fichas
+  que ya estaban guardadas no se tocan y el arte generado sigue cubriendo las carátulas.
+
 ## Privacidad y datos
 
 - Todo se guarda en `data/`: `biblioteca.json` (biblioteca y ajustes), `media/` (carátulas) y
   `backups/` (una copia por día, se conservan las 5 últimas).
-- La app **no envía nada** fuera de tu equipo, con una única excepción: si dejas activada la
-  opción *Descargar carátulas de las tiendas*, se pide la imagen al CDN de Steam y se guarda en
-  caché local. Desactívala y todo se resuelve con imágenes locales o generadas.
+- La app **no envía nada** fuera de tu equipo, con dos excepciones que controlas tú: si dejas
+  activada la opción *Descargar carátulas de las tiendas*, se pide la imagen al CDN de Steam y se
+  guarda en caché local; y si usas la pestaña *Metadatos*, se consulta Wikipedia, Wikidata o
+  Steam con el nombre del juego. Ambas se pueden desactivar y todo se resuelve con tus datos.
+- En el ejecutable, los datos viven en `%APPDATA%\Ludoteca` (o `~/.local/share/ludoteca` en
+  Linux, `~/Library/Application Support/Ludoteca` en macOS). Desde el código, en `data/`.
 - Exporta e importa toda la biblioteca en JSON desde **Ajustes → Datos**.
 - El servidor escucha en `0.0.0.0`, así que cualquiera en tu red local puede abrir la interfaz
   con `http://tu-ip:4337`. Si prefieres que no sea accesible, inicia con `--host 127.0.0.1`.
@@ -186,6 +239,11 @@ Toda la interfaz usa esta API local (JSON). Útil para automatizar o integrar co
 | `POST /api/folders` | Analiza una carpeta concreta (`kind: collection\|single\|rom`) |
 | `GET /api/fs?path=` | Explorador de archivos para elegir rutas |
 | `GET\|POST\|PATCH\|DELETE /api/emulators` | Perfiles de emulador |
+| `GET /api/metadata/search?query=&lang=&providers=` | Busca fichas (Wikipedia, Wikidata, Steam, RAWG) |
+| `GET /api/metadata/suggest?name=` | Mejor candidato automático para un nombre |
+| `GET /api/metadata/providers` | Comprueba qué fuentes responden |
+| `POST /api/metadata/fill` | Rellena huecos de hasta N juegos (`{gameIds, limit, overwrite}`) |
+| `POST /api/games/:id/metadata` | Aplica una ficha (`{candidate, fields, overwrite, downloadArt}`) |
 | `GET\|PATCH /api/settings` | Ajustes |
 | `GET /api/export` · `POST /api/import` | Copia de seguridad completa (`mode: merge\|replace`) |
 | `POST\|DELETE /api/demo` | Cargar o quitar la biblioteca de ejemplo |
@@ -195,6 +253,9 @@ Toda la interfaz usa esta API local (JSON). Útil para automatizar o integrar co
 ```
 server/
   index.js     servidor HTTP, API y archivos estáticos
+  assets.js    rutas de la app: funcionan igual desde el código y dentro del ejecutable
+  sea.js       extrae la interfaz incrustada cuando corre como ejecutable único
+  metadata.js  búsqueda de fichas: Wikipedia, Wikidata, Steam y RAWG
   store.js     almacén JSON con escritura atómica, respaldos, sesiones y estadísticas
   scanner.js   detección de Steam/Epic/GOG/Heroic/Lutris, carpetas, ROMs y puntuación de ejecutables
   launcher.js  lanzamiento de procesos y vigilancia de sesiones
@@ -205,9 +266,16 @@ public/
   index.html   estructura de la interfaz
   styles.css   tema oscuro con acento configurable
   js/          app, estado, componentes, vistas (biblioteca, ficha, actividad, estadísticas, buscar, ajustes)
-test/          48 pruebas: almacén, detección, lanzador, arte y API completa
+test/          66 pruebas: almacén, detección, lanzador, arte, metadatos y API completa
+scripts/
+  build-sea.mjs     construye el ejecutable único (Node + esbuild + postject)
+  build-dist.mjs    prepara la carpeta distribuible con el servidor empaquetado
+  portable.mjs      ZIP escrito a mano: empaquetado alternativo sin herramientas externas
+.github/workflows/  construcción automática del ejecutable en cada push
 data/          tus datos (ignorado por git)
-iniciar.bat    arranque de un clic en Windows
+dist/          resultado de las construcciones (ignorado por git)
+LEEME.txt      instrucciones para quien recibe el ejecutable
+iniciar.bat    arranque de un clic en Windows (alternativa al ejecutable)
 iniciar.sh     arranque de un clic en macOS/Linux
 ```
 
@@ -220,7 +288,10 @@ npm test
 Cubren el almacén y las estadísticas, la deduplicación (incluido el caso de varias ROMs en la
 misma carpeta), la puntuación de ejecutables, la limpieza de nombres, el recorrido de carpetas,
 las carátulas generadas, las plantillas del lanzador y una prueba de integración que arranca el
-servidor real y recorre la API entera (incluido lanzar y detener un juego).
+servidor real y recorre la API entera (incluido lanzar y detener un juego). Las 18 pruebas de
+metadatos usan respuestas simuladas de las fuentes, así que funcionan sin conexión a internet y
+comprueban el análisis de cada proveedor, el orden por parecido, el respaldo entre idiomas, la
+tolerancia a fuentes caídas y la regla de "no pisar lo que ya escribiste".
 
 ## Limitaciones conocidas
 
@@ -230,5 +301,6 @@ servidor real y recorre la API entera (incluido lanzar y detener un juego).
   `uplay://`, `battlenet://`) o su ejecutable.
 - La medición de tiempo se basa en procesos; los juegos con anticheat que ocultan su proceso
   pueden requerir registrar el tiempo a mano.
-- No hay descarga de metadatos de terceros (IGDB y similares): los datos descriptivos son los
-  locales, los de la ficha o los que escribas tú.
+- Los metadatos vienen de fuentes abiertas (Wikipedia, Wikidata, Steam y, con clave, RAWG); no
+  hay catálogos comerciales (IGDB y similares) ni búsqueda en Google. Para juegos muy nuevos o
+  poco documentados puede no haber ficha: en ese caso se escribe a mano desde la pestaña Editar.

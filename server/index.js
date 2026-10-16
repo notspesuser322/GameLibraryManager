@@ -21,31 +21,53 @@ import {
   analyzeFolder, isLaunchableFile, CONSOLES, cleanGameName,
 } from './scanner.js';
 import { buildDemoGames, touchToday } from './demo.js';
+import { MetadataService, buildPatch } from './metadata.js';
+import { resolveAssets, resolveDataDir } from './assets.js';
 import { nowIso, uid, ensureDir, exists, isInside, formatDuration } from './util.js';
 import * as util from './util.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT_DIR = path.resolve(__dirname, '..');
-const PUBLIC_DIR = path.join(ROOT_DIR, 'public');
 const VERSION = '1.0.0';
+
+/* rutas: funcionan igual en el repositorio y empaquetado como ejecutable */
+const assets = resolveAssets();
+const ROOT_DIR = assets.root;
+const PUBLIC_DIR = assets.publicDir;
+const DOCS_DIR = assets.docsDir;
 
 /* --------------------------------------------------------------- argumentos */
 
 function parseArgs(argv) {
-  const args = { port: Number(process.env.PORT) || 4337, host: process.env.HOST || '0.0.0.0', demo: false, open: false, dataDir: null };
+  const args = {
+    port: Number(process.env.LUDOTECA_PORT || process.env.PORT) || 4337,
+    host: process.env.LUDOTECA_HOST || process.env.HOST || '0.0.0.0',
+    demo: false,
+    open: false,
+    dataDir: null,
+  };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--port' || arg === '-p') args.port = Number(argv[++i]) || args.port;
     else if (arg === '--host') args.host = argv[++i] || args.host;
     else if (arg === '--demo') args.demo = true;
     else if (arg === '--open') args.open = true;
+    else if (arg === '--no-open') args.open = false;
     else if (arg === '--data-dir') args.dataDir = argv[++i];
+    else if (arg === '--version' || arg === '-v') args.version = true;
     else if (arg === '--help' || arg === '-h') args.help = true;
   }
   return args;
 }
 
 const args = parseArgs(process.argv.slice(2));
+/* doble clic en el ejecutable: sin argumentos se abre el navegador */
+const SIN_ARGUMENTOS = process.argv.slice(2).length === 0;
+if (SIN_ARGUMENTOS && process.env.LUDOTECA_PACKAGED === '1' && !process.argv.includes('--no-open')) args.open = true;
+if (args.version) {
+  /* útil para comprobar una compilación desde la integración continua */
+  console.log(`ludoteca ${VERSION}`);
+  process.exit(0);
+}
 if (args.help) {
   console.log(`Ludoteca ${VERSION}
 
@@ -56,15 +78,22 @@ Uso: node server/index.js [opciones]
   --data-dir <dir>  carpeta de datos (por defecto ./data)
   --demo            carga la biblioteca de ejemplo al iniciar
   --open            abre el navegador automaticamente
+  --version, -v     muestra la version y termina
+
+Variables de entorno:
+  LUDOTECA_PORT     puerto (igual que --port)
+  LUDOTECA_HOST     interfaz de escucha (igual que --host)
+  LUDOTECA_DATA_DIR carpeta de datos (igual que --data-dir)
 `);
   process.exit(0);
 }
 
 /* ------------------------------------------------------------------ arranque */
 
-const DATA_DIR = args.dataDir ? path.resolve(args.dataDir) : path.join(ROOT_DIR, 'data');
+const DATA_DIR = resolveDataDir({ assets });
 const store = new Store(path.join(DATA_DIR, 'biblioteca.json'));
 const media = new MediaStore(path.join(DATA_DIR, 'media'));
+const metadata = new MetadataService({ getSettings: () => store.settings });
 let launcher = null;
 
 async function bootstrap() {
@@ -237,7 +266,45 @@ function filteredGames(query) {
   return games;
 }
 
-/* ------------------------------------------------------------------- escaneo */
+/* --------------------------------------------------------------- metadatos */
+
+/**
+ * Vuelca un candidato de metadatos en la ficha de un juego.
+ * No pisa lo que el usuario ya escribió salvo que se pida expresamente.
+ */
+async function applyMetadata(game, candidate, { fields = {}, overwrite = false, downloadArt = true } = {}) {
+  const patch = buildPatch(candidate, fields, { overwrite, current: game });
+  if (candidate.coverUrl && downloadArt && store.settings.fetchRemoteArt !== false) {
+    const cover = await media.download(game.id, candidate.coverUrl, 'cover');
+    if (cover) patch.coverFile = cover;
+    if (candidate.bannerUrl) {
+      const banner = await media.download(game.id, candidate.bannerUrl, 'banner');
+      if (banner) patch.backgroundFile = banner;
+    }
+    if (!cover) patch.coverUrl = candidate.coverUrl;
+    if (!patch.backgroundFile && candidate.bannerUrl) patch.backgroundUrl = candidate.bannerUrl;
+  } else if (candidate.coverUrl) {
+    patch.coverUrl = candidate.coverUrl;
+    if (candidate.bannerUrl) patch.backgroundUrl = candidate.bannerUrl;
+  }
+
+  patch.extra = {
+    ...(game.extra || {}),
+    metadata: {
+      source: candidate.source,
+      id: candidate.id || null,
+      title: candidate.title || game.name,
+      url: candidate.url || null,
+      website: candidate.website || null,
+      score: candidate.score ?? null,
+      screenshots: candidate.screenshots || [],
+      fetchedAt: nowIso(),
+    },
+  };
+  return store.update(game.id, patch);
+}
+
+/* ------------------------------------------------------------------ escaneo */
 
 const scanState = {
   running: false,
@@ -302,6 +369,7 @@ async function importFindings(findings, options = {}) {
   let added = 0;
   let updated = 0;
   const errors = [];
+  const created = [];
   for (const item of findings) {
     const raw = item.candidate || item;
     if (!raw || !raw.name) continue;
@@ -333,7 +401,8 @@ async function importFindings(findings, options = {}) {
         await store.update(existing.id, payload);
         updated++;
       } else {
-        await store.add(payload, { dedupe: true });
+        const { game } = await store.add(payload, { dedupe: true });
+        created.push(game);
         added++;
       }
     } catch (err) {
@@ -341,7 +410,29 @@ async function importFindings(findings, options = {}) {
     }
   }
   await store.flush();
-  return { added, updated, errors };
+
+  /* fichas automáticas para lo que acaba de entrar sin datos (opcional, con límite) */
+  const metadataReport = { filled: 0, skipped: 0 };
+  const autoFill = options.fetchMetadata !== false && store.settings.metadata?.enabled !== false
+    && (options.fetchMetadata === true || store.settings.metadata?.autoFillOnScan === true);
+  if (autoFill && created.length) {
+    for (const game of created.slice(0, 10)) {
+      try {
+        const candidate = await metadata.bestMatch(game.name);
+        if (!candidate) {
+          metadataReport.skipped++;
+          continue;
+        }
+        await applyMetadata(game, candidate, { overwrite: false });
+        metadataReport.filled++;
+      } catch {
+        metadataReport.skipped++;
+      }
+    }
+    await store.flush();
+  }
+
+  return { added, updated, errors, metadata: metadataReport };
 }
 
 /* -------------------------------------------------------------- enrutamiento */
@@ -393,6 +484,8 @@ async function handleApi(req, res, pathname, query) {
       hostname: os.hostname(),
       mode: store.settings.demo ? 'demo' : 'normal',
       dataDir: DATA_DIR,
+      packaged: assets.packaged,
+      assetsRoot: ROOT_DIR,
       now: nowIso(),
     });
   }
@@ -400,7 +493,7 @@ async function handleApi(req, res, pathname, query) {
   if (resource === 'state') {
     const games = filteredGames(query).map(publicGame);
     return json(res, 200, {
-      app: { version: VERSION, platform: process.platform, dataDir: DATA_DIR, startedAt: bootTime },
+      app: { version: VERSION, platform: process.platform, dataDir: DATA_DIR, startedAt: bootTime, packaged: assets.packaged },
       games,
       facets: store.facets(),
       stats: store.stats(),
@@ -409,6 +502,7 @@ async function handleApi(req, res, pathname, query) {
       statuses: STATUSES,
       consoles: CONSOLES.map((c) => ({ id: c.id, label: c.label, extensions: c.extensions })),
       emulatorPresets: emulatorPresets(),
+      metadataProviders: metadata.config.providers,
       launcher: launcher?.status() || { sessions: {}, count: 0, log: [] },
       scan: { running: scanState.running, startedAt: scanState.startedAt, finishedAt: scanState.finishedAt, summary: scanState.last ? { at: scanState.last.at, counts: scanState.last.counts, scanned: scanState.last.scanned, errors: scanState.last.errors } : null },
       count: games.length,
@@ -505,6 +599,26 @@ async function handleApi(req, res, pathname, query) {
       if (!uri) return error(res, 400, 'No hay tienda asociada');
       await util.openExternal(uri);
       return json(res, 200, { ok: true, uri });
+    }
+
+    if (action === 'metadata' && method === 'POST') {
+      const body = await readBody(req).catch(() => ({}));
+      try {
+        let candidate = body.candidate || null;
+        if (!candidate) {
+          candidate = await metadata.bestMatch(body.query || game.name, { language: body.language });
+          if (!candidate) return error(res, 404, `Sin coincidencias para «${body.query || game.name}»`);
+        }
+        const updated = await applyMetadata(game, candidate, {
+          fields: body.fields || {},
+          overwrite: body.overwrite === true,
+          downloadArt: body.downloadArt !== false,
+        });
+        await store.flush();
+        return json(res, 200, { game: publicGame(updated), applied: candidate.source });
+      } catch (err) {
+        return error(res, 400, err.message);
+      }
     }
 
     if (action === 'detect-art' && method === 'POST') {
@@ -776,6 +890,56 @@ async function handleApi(req, res, pathname, query) {
     }
   }
 
+  /* ------------------------------------------------------------ metadatos */
+  if (resource === 'metadata') {
+    if (id === 'search' && method === 'GET') {
+      const queryText = query.get('query') || query.get('q') || '';
+      const providers = query.get('providers') ? Object.fromEntries(query.get('providers').split(',').map((p) => [p.trim(), true])) : undefined;
+      try {
+        const result = await metadata.search(queryText, { language: query.get('lang') || undefined, providers });
+        return json(res, 200, result);
+      } catch (err) {
+        return error(res, 400, err.message);
+      }
+    }
+    if (id === 'providers' && method === 'GET') {
+      return json(res, 200, await metadata.probeProviders());
+    }
+    if (id === 'suggest' && method === 'GET') {
+      try {
+        return json(res, 200, { candidate: await metadata.bestMatch(query.get('name') || '') });
+      } catch (err) {
+        return error(res, 400, err.message);
+      }
+    }
+    if (id === 'fill' && method === 'POST') {
+      const body = await readBody(req);
+      const onlyMissing = body.onlyMissing !== false;
+      const limit = Math.min(30, Math.max(1, Number(body.limit) || 8));
+      const pool = body.gameIds?.length ? body.gameIds.map((gid) => store.get(gid)).filter(Boolean) : store.list().filter((g) => !g.demo);
+      const targets = pool.filter((g) => (onlyMissing ? (!g.description || !g.coverFile || !(g.genres || []).length) : true)).slice(0, limit);
+      const filled = [];
+      const skipped = [];
+      const errors = [];
+      for (const game of targets) {
+        try {
+          const candidate = await metadata.bestMatch(game.name);
+          if (!candidate) {
+            skipped.push({ id: game.id, name: game.name, reason: 'sin coincidencias fiables' });
+            continue;
+          }
+          await applyMetadata(game, candidate, { overwrite: body.overwrite === true });
+          filled.push({ id: game.id, name: game.name, source: candidate.source, title: candidate.title, score: candidate.score });
+        } catch (err) {
+          errors.push({ id: game.id, name: game.name, message: err.message });
+        }
+      }
+      await store.flush();
+      return json(res, 200, { filled, skipped, errors, total: targets.length });
+    }
+    return error(res, 404, 'Ruta de metadatos no encontrada');
+  }
+
   /* ------------------------------------------------------------- ajustes */
   if (resource === 'settings') {
     if (method === 'GET') return json(res, 200, store.settings);
@@ -854,6 +1018,14 @@ async function serveImage(res, req, game, kind) {
 /* ------------------------------------------------------------------ estatico */
 
 async function serveStatic(req, res, pathname) {
+  /* /docs y lo que siga se sirve desde la carpeta de documentación */
+  if (pathname === '/docs' || pathname.startsWith('/docs/')) {
+    const rest = pathname.replace(/^\/docs\/?/, '');
+    const docsTarget = path.join(DOCS_DIR, rest || 'capturas.html');
+    if (!isInside(DOCS_DIR, docsTarget)) return error(res, 403, 'Ruta no permitida');
+    return sendFile(res, docsTarget);
+  }
+
   const relative = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
   const target = path.join(PUBLIC_DIR, relative);
   if (!isInside(PUBLIC_DIR, target)) return error(res, 403, 'Ruta no permitida');
@@ -866,6 +1038,10 @@ async function serveStatic(req, res, pathname) {
     if (!path.extname(relative)) file = path.join(PUBLIC_DIR, 'index.html');
     else return error(res, 404, 'Archivo no encontrado');
   }
+  return sendFile(res, file);
+}
+
+async function sendFile(res, file) {
   try {
     const buffer = await fsp.readFile(file);
     const ext = path.extname(file);
@@ -875,7 +1051,7 @@ async function serveStatic(req, res, pathname) {
       'cache-control': ext === '.html' ? 'no-store' : 'no-cache',
       'x-content-type-options': 'nosniff',
     });
-    res.end(buffer);
+    return res.end(buffer);
   } catch {
     return error(res, 404, 'Archivo no encontrado');
   }

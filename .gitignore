@@ -5,3 +5,4 @@ data/
 Thumbs.db
 .env
 tokens.json
+dist/

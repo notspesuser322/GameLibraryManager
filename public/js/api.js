@@ -56,6 +56,13 @@ export const api = {
   uploadArt: (id, kind, data) => request(`/api/games/${id}/${kind}`, { method: 'POST', body: { data } }),
   resetArt: (id, kind) => request(`/api/games/${id}/${kind}`, { method: 'DELETE' }),
 
+  /* metadatos: búsqueda en Wikipedia, Wikidata, Steam y RAWG */
+  metadataSearch: (params) => request(`/api/metadata/search${toQuery(params)}`),
+  metadataProviders: () => request('/api/metadata/providers'),
+  metadataSuggest: (name) => request(`/api/metadata/suggest${toQuery({ name })}`),
+  metadataFill: (payload = {}) => request('/api/metadata/fill', { method: 'POST', body: payload }),
+  applyMetadata: (gameId, payload) => request(`/api/games/${gameId}/metadata`, { method: 'POST', body: payload }),
+
   sessions: (limit = 80) => request(`/api/sessions?limit=${limit}`),
   addSession: (payload) => request('/api/sessions', { method: 'POST', body: payload }),
   removeSession: (gameId, index) => request(`/api/sessions?gameId=${gameId}&index=${index}`, { method: 'DELETE' }),
