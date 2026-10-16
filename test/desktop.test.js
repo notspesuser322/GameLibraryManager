@@ -42,7 +42,7 @@ test('los argumentos de la ventana son los de una app, no los de una pestaña', 
   assert.ok(args.includes('--no-first-run'));
   assert.ok(args.includes('--no-default-browser-check'));
   assert.ok(args.some((a) => a.includes('disable-features') && a.includes('Translate')), 'sin traducción automática');
-  assert.ok(args.some((a) => a.startsWith('--user-agent=Nébula/')), 'se identifica como la aplicación');
+  assert.ok(args.some((a) => a.startsWith('--user-agent=Nebula/')), 'se identifica como la aplicación');
   assert.equal(args.some((a) => a.includes('--incognito')), false, 'no es una ventana de incógnito');
 });
 

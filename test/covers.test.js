@@ -42,7 +42,7 @@ before(async () => {
 
     /* imita a Wikimedia: exige identificación y redirige las direcciones bonitas */
     if (ruta.startsWith('/wiki/Special:FilePath')) {
-      if (!ua.includes('Nébula/')) {
+      if (!ua.includes('Nebula/')) {
         res.writeHead(403, { 'content-type': 'text/plain' });
         res.end('Debes identificarte');
         return;
@@ -130,7 +130,7 @@ test('extensionDeImagen acierta con el tipo y con el contenido', () => {
 
 test('las peticiones de imagen se identifican (Wikimedia lo exige)', () => {
   const cabeceras = cabecerasImagen();
-  assert.match(cabeceras['user-agent'], /^Nébula\//);
+  assert.match(cabeceras['user-agent'], /^Nebula\//);
   assert.match(cabeceras['user-agent'], /\(.+\)$/, 'lleva descripción y forma de contacto');
   assert.match(cabeceras.accept, /image\//);
   assert.equal(cabecerasImagen({ referer: 'https://store.steampowered.com/' }).referer, 'https://store.steampowered.com/');
@@ -148,7 +148,7 @@ test('descarga una carátula que exige identificación y pasa por una redirecci�
   assert.equal(archivo.endsWith('.png'), true, 'se guarda con la extensión correcta');
   const datos = fs.readFileSync(archivo);
   assert.equal(datos.subarray(0, 4).toString('hex'), '89504e47', 'es el PNG de verdad');
-  assert.ok(peticiones.some((p) => p.ruta.includes('Special:FilePath') && p.ua.includes('Nébula/')), 'se identificó como Nébula');
+  assert.ok(peticiones.some((p) => p.ruta.includes('Special:FilePath') && p.ua.includes('Nebula/')), 'se identificó como Nebula');
 });
 
 test('descargaBest prueba en orden hasta que una dirección responde', async () => {

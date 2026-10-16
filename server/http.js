@@ -7,10 +7,13 @@
  * los datos de texto sí lleguen. Por eso el agente de usuario se define aquí una
  * sola vez y con el formato que piden.
  */
-export const CONTACTO = 'https://github.com/notspesuser322/GameLibraryManager';
-export const VERSION_UA = '1.1';
+import { VERSION } from './version.js';
 
-export const USER_AGENT = `Nébula/${VERSION_UA} (gestor de biblioteca de juegos local; ${CONTACTO})`;
+export const CONTACTO = 'https://github.com/notspesuser322/GameLibraryManager';
+
+/* Solo caracteres ASCII: las cabeceras HTTP deben ir en ASCII y algunos
+   servicios rechazan los agentes de usuario con acentos. */
+export const USER_AGENT = `Nebula/${VERSION} (biblioteca de juegos local; +${CONTACTO})`;
 
 /** Cabeceras que aceptan tanto wikis como CDNs de tiendas. */
 export function cabecerasImagen({ referer = null } = {}) {
