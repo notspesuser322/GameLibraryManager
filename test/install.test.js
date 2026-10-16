@@ -14,7 +14,7 @@ import path from 'node:path';
 import {
   NOMBRE, NOMBRE_VISIBLE, rutasInstalacion, scriptAccesosDirectos, scriptBorrarAccesosDirectos,
   argumentosRegistro, argumentosBorrarRegistro, esModoInstalado, instalar, desinstalar, version,
-  loteBorrado,
+  lanzadorOculto, loteBorrado,
 } from '../server/install.js';
 
 const WIN_ENV = { LOCALAPPDATA: 'C:\\Users\\Ana\\AppData\\Local', APPDATA: 'C:\\Users\\Ana\\AppData\\Roaming' };
@@ -39,17 +39,20 @@ test('los accesos directos se crean en el menú Inicio y en el escritorio', () =
   assert.match(script, /GetFolderPath\("Programs"\)/);
   assert.match(script, /GetFolderPath\("Desktop"\)/);
   assert.match(script, new RegExp(`${NOMBRE}\\.lnk`));
-  assert.match(script, /Nebula\.exe/, 'abre el propio programa, sin lanzadores intermedios');
+  assert.match(script, /Nebula\.vbs/, 'usa el lanzador oculto, sin ventana de consola');
+  assert.match(script, /wscript\.exe/, 'lo abre con el intérprete de Windows');
   assert.match(script, /Nebula\.exe,0/, 'toma el icono del programa');
-  assert.ok(!/wscript|\.vbs|\.cmd|\.bat/.test(script), 'ni consola ni archivos intermedios');
   assert.match(script, /IconLocation/);
   assert.match(script, /\$lnk\.Save\(\)/);
 });
 
-test('la carpeta de instalación solo guarda el programa', () => {
-  const rutas = rutasWin();
-  assert.ok(!('lanzador' in rutas), 'sin lanzador .cmd');
-  assert.ok(!('lanzadorOculto' in rutas), 'sin lanzador .vbs');
+test('el acceso directo abre Nébula sin la ventana negra de la consola', () => {
+  const vbs = lanzadorOculto();
+  assert.match(vbs, /WScript\.Shell/, 'usa el intérprete de Windows');
+  assert.match(vbs, /GetParentFolderName\(WScript\.ScriptFullName\)/, 'encuentra su propia carpeta');
+  const linea = vbs.split('\r\n').find((l) => l.startsWith('shell.Run'));
+  /* 0 = ventana oculta, False = no esperar a que termine */
+  assert.equal(linea, 'shell.Run """" & carpeta & "\\Nebula.exe""", 0, False');
 });
 
 test('el borrado de accesos directos es tolerante: solo quita lo que existe', () => {

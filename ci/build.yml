@@ -150,19 +150,19 @@ jobs:
           if (-not (Test-Path $acceso)) { Fallo 'No se creo el acceso directo del menu Inicio' }
           Write-Host 'Acceso directo del menu Inicio: correcto'
 
-          # la carpeta de instalacion solo tiene el programa: sin lanzadores intermedios
+          # nada de lanzadores de consola (.cmd ni .bat) en la carpeta de instalacion
           $sobrantes = Get-ChildItem $programa -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.Extension -in '.cmd', '.bat', '.vbs', '.ps1' }
+            Where-Object { $_.Extension -in '.cmd', '.bat', '.ps1' }
           if ($sobrantes) { Fallo ('Sobran lanzadores en la carpeta de instalacion: ' + ($sobrantes.Name -join ', ')) }
-          Write-Host 'Carpeta de instalacion limpia: solo el programa'
+          Write-Host 'Carpeta de instalacion sin lanzadores de consola'
 
-          # el acceso directo apunta al propio ejecutable, que ya no abre consola
+          # el acceso directo abre el programa sin que aparezca ninguna ventana negra
+          $lanzador = Join-Path $programa 'Nebula.vbs'
+          if (-not (Test-Path $lanzador)) { Fallo 'Falta el lanzador sin consola' }
           $atajo = (New-Object -ComObject WScript.Shell).CreateShortcut($acceso)
           Write-Host ("Acceso directo: {0} {1}" -f $atajo.TargetPath, $atajo.Arguments)
-          if ($atajo.TargetPath -notmatch 'Nebula\.exe$') { Fallo 'El acceso directo deberia abrir Nebula.exe' }
-          if ("$($atajo.TargetPath) $($atajo.Arguments)" -match 'wscript|\.vbs|\.cmd|\.bat') {
-            Fallo 'El acceso directo no deberia usar lanzadores intermedios'
-          }
+          if ($atajo.TargetPath -notmatch 'wscript') { Fallo 'El acceso directo deberia abrir el programa sin consola' }
+          if ($atajo.Arguments -notmatch 'Nebula\.vbs') { Fallo 'El acceso directo deberia usar el lanzador oculto' }
           Add-Type -AssemblyName System.Drawing
           $icono = [System.Drawing.Icon]::ExtractAssociatedIcon((Join-Path $programa 'Nebula.exe'))
           if (-not $icono) { Fallo 'El ejecutable no tiene icono propio' }

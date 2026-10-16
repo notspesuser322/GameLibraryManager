@@ -26,7 +26,7 @@ test('el script de PowerShell viaja codificado y llega entero', () => {
   assert.equal(args[4], '-EncodedCommand', 'nada de -Command con comillas sueltas');
   assert.equal(Buffer.from(args[5], 'base64').toString('utf16le'), script, 'llega igual que salió');
   assert.match(decodificado(args[5]), /WScript\.Shell/);
-  assert.match(decodificado(args[5]), /Nebula\.exe/);
+  assert.match(decodificado(args[5]), /Nebula\.vbs/);
 });
 
 test('codificar usa UTF-16, que es lo que espera Windows', () => {
@@ -44,8 +44,10 @@ test('el respaldo en VBScript crea los mismos accesos directos', () => {
   const vbs = scriptAccesosDirectosVbs(r);
   assert.match(vbs, /CreateObject\("WScript\.Shell"\)/);
   assert.match(vbs, /Option Explicit/, 'declara las variables');
-  assert.match(vbs, /lnk\.TargetPath = ".*Nebula\.exe"/);
-  assert.ok(!/wscript|\.vbs/.test(vbs), 'sin lanzadores intermedios');
+  assert.match(vbs, /Nebula\.vbs/);
+  /* las comillas de la ruta se escriben con Chr(34) para no escapar nada */
+  assert.match(vbs, /lnk\.Arguments = Chr\(34\) & ".*Nebula\.vbs" & Chr\(34\)/);
+  assert.match(vbs, /lnk\.TargetPath = "%SystemRoot%\\System32\\wscript\.exe"/);
   assert.match(vbs, /lnk\.IconLocation = ".*Nebula\.exe,0"/);
   assert.match(vbs, /FolderExists/, 'no crea el acceso si la carpeta no existe');
   assert.ok(vbs.includes('Programs'), 'menú Inicio');
