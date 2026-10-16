@@ -86,12 +86,25 @@ comprueban que Node esté instalado, arrancan la app y abren el navegador
 
 ### Construir el ejecutable tú mismo
 
+Con el Node del sistema (para Linux, macOS o Windows):
+
 ```bash
 npm install --no-save esbuild postject
 node scripts/build-sea.mjs --runtime "$(command -v node)" --out dist/Ludoteca.exe
 ```
 
-El resultado es un único archivo con el servidor, la interfaz y la documentación dentro.
+Para el ejecutable **de Windows desde Linux o macOS** (trae el node.exe oficial a través del
+registro de npm, así que no hace falta Windows ni la web de Node):
+
+```bash
+npm install --no-save esbuild postject
+node scripts/fetch-node-win.mjs
+node scripts/build-sea.mjs --runtime dist/node-win/package/bin/node.exe --out dist/Ludoteca.exe
+```
+
+El resultado es un único archivo con el servidor, la interfaz y la documentación dentro. Al
+comprobarlo se verifica que el contenido esté incrustado, que la cabecera del ejecutable siga
+intacta y que la marca de «ejecutable único» pase de `:0` a `:1`.
 
 Opciones de línea de comandos:
 
@@ -310,6 +323,7 @@ public/
 test/          74 pruebas: almacén, detección, lanzador, arte, metadatos, consola y API completa
 scripts/
   build-sea.mjs     construye el ejecutable único (Node + esbuild + postject)
+  fetch-node-win.mjs  trae el node.exe oficial de Windows desde el registro de npm
   build-dist.mjs    prepara la carpeta distribuible con el servidor empaquetado
   portable.mjs      ZIP escrito a mano: empaquetado alternativo sin herramientas externas
 ci/build.yml   flujo de trabajo listo: copiar a .github/workflows/ para activarlo
