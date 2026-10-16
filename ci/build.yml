@@ -169,12 +169,19 @@ jobs:
               Start-Sleep -Seconds 1
               try { Invoke-RestMethod -Uri 'http://127.0.0.1:4396/api/health' -TimeoutSec 3 | Out-Null; break } catch { }
             }
-            Start-Sleep -Seconds 5
-            $estado = Invoke-RestMethod -Uri 'http://127.0.0.1:4396/api/state' -TimeoutSec 10
-            Write-Host ("Modo de apertura: {0}" -f $estado.app.ventana)
-            Get-Content $log -ErrorAction SilentlyContinue | Where-Object { $_ -match 'Ventana|Aviso|navegador' } | Write-Host
-            if ($estado.app.ventana -ne 'aplicacion') { Write-Host '::warning::No se pudo abrir la ventana propia en este equipo' }
+            Start-Sleep -Seconds 4
+            $estado = $null
+            try { $estado = Invoke-RestMethod -Uri 'http://127.0.0.1:4396/api/state' -TimeoutSec 10 } catch { }
+            if ($estado) {
+              Write-Host ("Modo de apertura: {0}" -f $estado.app.ventana)
+              if ($estado.app.ventana -ne 'aplicacion') { Write-Host '::warning::No se pudo abrir la ventana propia en este equipo' }
+            } else {
+              Write-Host '::warning::No se pudo leer el estado con la ventana abierta'
+            }
+          } catch {
+            Write-Host "::warning::La comprobacion del modo ventana no se pudo completar: $_"
           } finally {
+            Get-Content $log -ErrorAction SilentlyContinue | Where-Object { $_ -match 'Ventana|Aviso|navegador' } | Write-Host
             Stop-Process -Id $app2.Id -Force -ErrorAction SilentlyContinue
           }
 
