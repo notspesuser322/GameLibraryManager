@@ -35,7 +35,7 @@ test('splitArgs respeta comillas y espacios', () => {
 });
 
 test('launcher: las sesiones de ejemplo se abren y cierran registrando tiempo', async () => {
-  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'ludoteca-launch-'));
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'nebula-launch-'));
   const store = new Store(path.join(dir, 'biblioteca.json'));
   await store.load();
   const { game } = await store.add({ name: 'Juego de ejemplo', demo: true, status: 'backlog' });
@@ -59,7 +59,7 @@ test('launcher: las sesiones de ejemplo se abren y cierran registrando tiempo', 
 });
 
 test('launcher: un juego sin ejecutable ni comando informa el motivo', async () => {
-  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'ludoteca-launch2-'));
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'nebula-launch2-'));
   const store = new Store(path.join(dir, 'biblioteca.json'));
   await store.load();
   const { game } = await store.add({ name: 'Sin nada' });
@@ -70,7 +70,7 @@ test('launcher: un juego sin ejecutable ni comando informa el motivo', async () 
 });
 
 test('launcher: detecta ejecutables inexistentes antes de arrancar', async () => {
-  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'ludoteca-launch3-'));
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'nebula-launch3-'));
   const store = new Store(path.join(dir, 'biblioteca.json'));
   await store.load();
   const { game } = await store.add({ name: 'Ruta rota', executable: path.join(dir, 'no-existe.exe') });
@@ -80,7 +80,7 @@ test('launcher: detecta ejecutables inexistentes antes de arrancar', async () =>
 });
 
 test('launcher: respeta el perfil de emulador', async () => {
-  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'ludoteca-launch4-'));
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'nebula-launch4-'));
   const store = new Store(path.join(dir, 'biblioteca.json'));
   await store.load();
   const profile = { id: 'emu_test', name: 'Emulador de prueba', command: 'echo "{rom}"', consoles: ['snes'] };

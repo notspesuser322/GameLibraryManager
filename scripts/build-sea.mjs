@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * Crea el ejecutable único de Ludoteca con el mecanismo oficial de Node (SEA).
+ * Crea el ejecutable único de Nébula con el mecanismo oficial de Node (SEA).
  *
- *   node scripts/build-sea.mjs --runtime /ruta/a/node.exe --out dist/Ludoteca.exe
+ *   node scripts/build-sea.mjs --runtime /ruta/a/node.exe --out dist/Nebula.exe
  *
  * Pasos:
  *   1. se empaqueta todo el servidor en un solo archivo (esbuild);
@@ -22,6 +22,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SENTINEL = 'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2';
+const VERSION_PAQUETE = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
 
 function arg(name, fallback = null) {
   const index = process.argv.indexOf(`--${name}`);
@@ -31,16 +32,33 @@ function arg(name, fallback = null) {
 const write = (message) => process.stdout.write(`  ${message}\n`);
 const mb = (bytes) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
+/**
+ * Pone el icono y los datos del programa dentro del ejecutable de Windows.
+ * Se hace con resedit (JavaScript puro) para que funcione desde cualquier
+ * sistema, no solo desde Windows. Va ANTES de inyectar la aplicación, porque el
+ * marcado reescribe el archivo.
+ */
+async function marcar(ejecutable, log = write) {
+  const { marcarEjecutable } = await import('./brand-exe.mjs');
+  const resultado = marcarEjecutable(ejecutable, {
+    icono: path.join(ROOT, 'branding', 'icono.ico'),
+    version: VERSION_PAQUETE,
+    log,
+  });
+  if (!resultado.ok) log(`aviso: el ejecutable queda sin icono propio (${resultado.motivo})`);
+  return resultado.ok;
+}
+
 /* los dos sabores del ejecutable: solo el programa, o instalable */
 export const MODOS = {
   portable: {
     entry: path.join(ROOT, 'scripts', 'sea-main.js'),
-    nombre: 'Ludoteca.exe',
+    nombre: 'Nebula.exe',
     descripcion: 'version portable (el programa solo)',
   },
   instalador: {
     entry: path.join(ROOT, 'scripts', 'installer-main.js'),
-    nombre: 'Ludoteca-Instalador.exe',
+    nombre: 'Nebula-Instalador.exe',
     descripcion: 'instalador (instala, arranca y se desinstala)',
   },
 };
@@ -66,7 +84,7 @@ export async function buildSea({ runtime, out, log = write, prelude = [], assets
   /* 1. servidor + preludio en un solo archivo */
   const entrada = MODOS[modo] || MODOS.portable;
   const entry = entrada.entry;
-  const version = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
+  const version = VERSION_PAQUETE;
   const bundlePath = path.join(work, 'main.js');
   await esbuild.build({
     entryPoints: [entry],
@@ -79,7 +97,7 @@ export async function buildSea({ runtime, out, log = write, prelude = [], assets
     legalComments: 'none',
     define: {
       'import.meta.url': 'importMetaUrl',
-      __LUDOTECA_VERSION__: JSON.stringify(version),
+      __NEBULA_VERSION__: JSON.stringify(version),
     },
     banner: { js: "const importMetaUrl = require('node:url').pathToFileURL(__filename).href;" },
     inject: prelude.length ? prelude : undefined,
@@ -120,14 +138,22 @@ export async function buildSea({ runtime, out, log = write, prelude = [], assets
   const blob = fs.readFileSync(blobPath);
   log(`blob generado (${mb(blob.length)})`);
 
-  /* 4. inyección dentro de una copia del binario de Node */
+  /* 4. copia del binario de Node e inyección de la aplicación.
+     El orden importa: postject primero, sobre el binario original de Node, y el
+     icono y los datos del programa después. Al revés, postject avisa de que las
+     tablas del ejecutable no cuadran y el archivo sale incompleto. */
   fs.mkdirSync(path.dirname(out), { recursive: true });
   fs.copyFileSync(runtime, out);
   if (process.platform !== 'win32') fs.chmodSync(out, 0o755);
+
   await postject.inject(out, 'NODE_SEA_BLOB', blob, {
     sentinelFuse: SENTINEL,
     machoSegmentName: 'NODE_SEA',
   });
+  log(`aplicación inyectada (${mb(fs.statSync(out).size)})`);
+
+  /* 5. icono propio y datos del programa (nombre, versión, autor) */
+  if (path.extname(out).toLowerCase() === '.exe') await marcar(out, log);
   log(`ejecutable listo (${mb(fs.statSync(out).size)})`);
   return out;
 }

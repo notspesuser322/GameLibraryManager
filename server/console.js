@@ -10,8 +10,8 @@
  * escribe todo en ASCII simple (sin acentos ni adornos) para que se lea bien
  * en cualquier equipo.
  *
- *   LUDOTECA_CONSOLE=ascii   fuerza el modo ASCII
- *   LUDOTECA_CONSOLE=utf8    fuerza UTF-8 (no intenta cambiar nada)
+ *   NEBULA_CONSOLE=ascii   fuerza el modo ASCII
+ *   NEBULA_CONSOLE=utf8    fuerza UTF-8 (no intenta cambiar nada)
  */
 import { execFileSync } from 'node:child_process';
 
@@ -77,7 +77,7 @@ export function envolverEscritura(flujo) {
  * Deja la consola lista para escribir. Devuelve true si se puede usar Unicode
  * (acentos y adornos) y false si se está en modo ASCII.
  */
-export function prepararConsola({ forzar = process.env.LUDOTECA_CONSOLE || '' } = {}) {
+export function prepararConsola({ forzar = process.env.NEBULA_CONSOLE || '' } = {}) {
   /* con un modo forzado se responde siempre igual, sin quedarse con el primero */
   if (estado && !forzar) return estado.unicode;
 
@@ -92,7 +92,7 @@ export function prepararConsola({ forzar = process.env.LUDOTECA_CONSOLE || '' } 
     }
   }
 
-  if (!unicode && !console.__ludotecaAscii) {
+  if (!unicode && !console.__nebulaAscii) {
     /* se envuelven las funciones de console, no la salida del proceso: así no se
        estorba a otras herramientas que escriban por stdout (por ejemplo, el
        propio ejecutor de pruebas) */
@@ -100,7 +100,7 @@ export function prepararConsola({ forzar = process.env.LUDOTECA_CONSOLE || '' } 
       const original = console[metodo].bind(console);
       console[metodo] = (...args) => original(...args.map((arg) => (typeof arg === 'string' ? aAscii(arg) : arg)));
     }
-    console.__ludotecaAscii = true;
+    console.__nebulaAscii = true;
   }
 
   /* se guarda para que las llamadas siguientes no repitan el trabajo; una

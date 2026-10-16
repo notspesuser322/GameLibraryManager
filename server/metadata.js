@@ -19,6 +19,7 @@
  * documentada y cubren exactamente el caso de juegos que no están en tiendas.
  */
 import { normalize, truncate } from './util.js';
+import { cabecerasDatos } from './http.js';
 
 const DEFAULT_TIMEOUT = 9000;
 const MIN_INTERVAL_MS = 300; /* cortesía entre peticiones al mismo servicio */
@@ -106,6 +107,24 @@ function uniqueStrings(list) {
 }
 
 /** Convierte nombres de archivo de Commons en URLs de imagen. */
+/**
+ * Variantes de una URL de Wikimedia: la versión con ancho fijo a veces falla o
+ * tarda, y la original sí responde. Se prueban las dos.
+ */
+export function wikimediaVariants(url) {
+  const texto = String(url || '');
+  if (!texto) return [];
+  if (texto.includes('Special:FilePath')) {
+    const sinAncho = texto.replace(/[?&]width=\d+/, '').replace(/[?&]$/, '');
+    return sinAncho === texto ? [texto] : [sinAncho, texto];
+  }
+  if (texto.includes('/thumb/')) {
+    const original = texto.replace(/\/thumb\/(.+?)\/[^/]+$/, '/$1');
+    return original === texto ? [texto] : [original, texto];
+  }
+  return [texto];
+}
+
 export function commonsUrl(fileName, width = 1200) {
   const name = String(fileName || '').replace(/^File:/i, '').trim();
   if (!name) return null;
@@ -245,11 +264,7 @@ export class MetadataService {
     try {
       const response = await this.fetch(url, {
         signal: controller.signal,
-        headers: {
-          'user-agent': 'Ludoteca/1.0 (gestor de biblioteca local)',
-          accept: 'application/json',
-          ...headers,
-        },
+        headers: cabecerasDatos(headers),
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const value = await response.json();
@@ -434,6 +449,83 @@ export class MetadataService {
   }
 
   /* -------------------------------------------------------------- búsqueda */
+
+  /* ------------------------------------------------------------- imágenes */
+
+  /**
+   * Imagen del artículo de Wikipedia sacada de la propia página (og:image).
+   * Sirve cuando Wikidata no tiene imagen del juego y el resumen tampoco.
+   */
+  async pageImage(lang, title) {
+    if (!title) return null;
+    const key = `og:${lang}:${title}`;
+    const guardada = this.cache.get(key);
+    if (guardada && Date.now() - guardada.at < CACHE_TTL_MS) return guardada.value;
+
+    const url = `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(String(title).replace(/ /g, '_'))}`;
+    await this.#throttle(`${lang}.wikipedia.org`);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT);
+    try {
+      const respuesta = await this.fetch(url, { signal: controller.signal, headers: cabecerasDatos(), redirect: 'follow' });
+      if (!respuesta.ok) return null;
+      const html = await respuesta.text();
+      const encontrada = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+        || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
+      const valor = encontrada ? encontrada[1].replace(/&amp;/g, '&') : null;
+      this.cache.set(key, { at: Date.now(), value: valor });
+      return valor;
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /**
+   * Direcciones que se probarán, en orden, para bajar la imagen de una ficha.
+   * @param {object} candidate ficha de search()/bestMatch()
+   * @param {{kind?: 'cover'|'banner'}} [opciones]
+   */
+  async coverOptions(candidate, { kind = 'cover' } = {}) {
+    const lista = [];
+    const meter = (url, referer = null) => {
+      if (!url || lista.some((o) => o.url === url)) return;
+      lista.push({ url, referer });
+    };
+
+    if (candidate.source === 'steam') {
+      const appId = candidate.extra?.appId || candidate.id;
+      const bases = [
+        'https://cdn.cloudflare.steamstatic.com/steam/apps',
+        'https://cdn.akamai.steamstatic.com/steam/apps',
+        'https://steamcdn-a.akamaihd.net/steam/apps',
+      ];
+      const nombres = kind === 'banner'
+        ? ['library_hero.jpg', 'header.jpg', 'page_bg_generated_v6b.jpg', 'capsule_616x353.jpg']
+        : ['library_600x900.jpg', 'library_600x900_2x.jpg', 'header.jpg', 'capsule_616x353.jpg', 'page_bg_generated_v6b.jpg'];
+      for (const base of bases) {
+        for (const nombre of nombres) meter(`${base}/${appId}/${nombre}`, 'https://store.steampowered.com/');
+      }
+    }
+
+    const propia = kind === 'banner' ? candidate.bannerUrl : candidate.coverUrl;
+    for (const variante of wikimediaVariants(propia)) meter(variante, candidate.url || null);
+
+    /* si no hay fondo propio, se usa la carátula */
+    if (kind === 'banner' && candidate.coverUrl && candidate.coverUrl !== propia) {
+      for (const variante of wikimediaVariants(candidate.coverUrl)) meter(variante, candidate.url || null);
+    }
+
+    /* último recurso: la imagen del artículo de Wikipedia */
+    if (kind === 'cover' && !propia && (candidate.source === 'wikipedia' || candidate.extra?.pageid)) {
+      const lang = candidate.extra?.language || this.config.language;
+      const imagen = await this.pageImage(lang, candidate.title);
+      if (imagen) for (const variante of wikimediaVariants(imagen)) meter(variante, candidate.url || null);
+    }
+
+    return lista;
+  }
 
   /**
    * Busca fichas para un nombre de juego en todas las fuentes activas.

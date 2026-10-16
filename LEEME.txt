@@ -1,27 +1,46 @@
-LUDOTECA 1.1.0 - instrucciones rapidas
-======================================
+NEBULA 1.2.0 - instrucciones rapidas
+====================================
 
 DOS FORMAS DE USARLO
 --------------------
 
 A) INSTALADOR (recomendado)
-   Doble clic en Ludoteca-Instalador.exe y sigue el aviso.
+   Doble clic en Nebula-Instalador.exe y sigue el aviso.
    - Se instala en tu carpeta de usuario (no pide permisos de administrador).
    - Crea accesos directos en el menu Inicio y en el escritorio.
    - Aparece en "Aplicaciones instaladas" para quitarlo cuando quieras.
    - Al terminar te pregunta si quieres abrirlo.
 
 B) PORTABLE (sin instalar)
-   Descomprime el ZIP y abre Ludoteca.exe desde donde lo tengas.
+   Descomprime el ZIP y abre Nebula.exe desde donde lo tengas.
 
-En los dos casos se abre el navegador con tu biblioteca en
-http://localhost:4337
+SE ABRE COMO UN PROGRAMA, NO COMO UNA PAGINA WEB
+------------------------------------------------
+Nebula abre su propia ventana de aplicacion: sin barra de direcciones, sin
+pestanas y con el icono del programa en la barra de tareas. Se cierra cuando
+cierras esa ventana, como cualquier otro programa.
+
+Para ello usa Chrome o Edge (cualquier navegador basado en Chromium que tengas
+instalado) en "modo aplicacion". Si no hay ninguno, abre la interfaz en tu
+navegador de siempre y lo avisa.
+
+Si prefieres verlo en el navegador normal:
+
+    Nebula.exe --browser
+
+Si vas a usarlo desde una terminal y quieres que siga funcionando al cerrar la
+ventana:
+
+    Nebula.exe --keep-alive
+
+La direccion sigue siendo http://localhost:4337, por si quieres abrir la
+biblioteca tambien desde el celular en tu red.
 
 DONDE SE GUARDAN TUS DATOS
 --------------------------
 En tu carpeta de usuario, no junto al programa:
 
-    %APPDATA%\Ludoteca
+    %APPDATA%\Nebula
 
 Ahi estan la biblioteca (biblioteca.json) y las caratulas que descargues. Puedes
 mover el programa o reinstalarlo sin perder nada, y hacer copia de seguridad
@@ -29,19 +48,19 @@ copiando esa carpeta.
 
 COMO QUITARLO
 -------------
-- Instalado: Aplicaciones instaladas -> Ludoteca -> Desinstalar. Tambien sirve
+- Instalado: Aplicaciones instaladas -> Nebula -> Desinstalar. Tambien sirve
   abrir una terminal en la carpeta de instalacion y ejecutar
-  "Ludoteca.exe --uninstall".
+  "Nebula.exe --uninstall".
 - Portable: borra la carpeta donde lo descomprimiste.
 
 Tus datos se conservan siempre; si quieres borrarlos tambien, elimina la carpeta
-%APPDATA%\Ludoteca.
+%APPDATA%\Nebula.
 
 SI EL PUERTO 4337 ESTA OCUPADO
 ------------------------------
-Abre una terminal y ejecuta:
+Nebula lo avisa con una ventana. Abre una terminal y ejecuta:
 
-    Ludoteca.exe --port 4400
+    Nebula.exe --port 4400
 
 Opciones disponibles:
 
@@ -49,13 +68,16 @@ Opciones disponibles:
     --host <addr>      interfaz de escucha (por defecto 0.0.0.0)
     --data-dir <dir>   otra carpeta de datos
     --demo             biblioteca de ejemplo con 40 juegos ficticios
-    --no-open          no abrir el navegador
+    --open             abre la ventana de la aplicacion al iniciar
+    --no-open          no abre nada (solo arranca el servidor)
+    --browser          abre en el navegador en vez de en la ventana propia
+    --keep-alive       no se cierra al cerrar la ventana
     --version, -v      version del programa
 
 Variables de entorno en lugar de opciones:
 
-    set LUDOTECA_PORT=4400
-    Ludoteca.exe
+    set NEBULA_PORT=4400
+    Nebula.exe
 
 AVISO DE WINDOWS
 ----------------
@@ -63,10 +85,19 @@ Si aparece el aviso azul "Windows protegio tu PC", pulsa "Mas informacion" y
 luego "Ejecutar de todas formas". Sale porque el programa no esta firmado con un
 certificado de pago; no es un virus.
 
-METADATOS AUTOMATICOS
----------------------
+METADATOS Y CARATULAS AUTOMATICOS
+---------------------------------
 En la ficha de cada juego hay una pestana "Metadatos": sirve para traer
 descripcion, desarrollador, fecha, generos y caratula de juegos que no estan en
 ninguna tienda (por ejemplo Minecraft lanzado con HMCL, juegos emulados o
-programas sueltos). Consulta Wikipedia, Wikidata y Steam. Necesita conexion a
-internet; si no la hay, avisa y la biblioteca sigue funcionando igual.
+programas sueltos). Consulta Wikipedia, Wikidata y Steam.
+
+La caratula se busca aparte de la ficha, porque no siempre esta en la misma
+fuente: se prueban varias direcciones (Steam y Wikimedia) hasta que una
+devuelve una imagen de verdad. En la pestana veras si la caratula llego
+("con imagen") o si solo se guardaron los datos ("solo datos"), con el motivo
+concreto cuando falla, y un boton "Reintentar la caratula" para volver a
+intentarlo sin tocar el resto.
+
+Necesita conexion a internet; si no la hay, avisa y la biblioteca sigue
+funcionando igual.

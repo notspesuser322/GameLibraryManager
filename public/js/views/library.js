@@ -111,7 +111,7 @@ function wire(root) {
   root.querySelector('[data-toggle-direction]')?.addEventListener('click', () => updateQuery({ direction: state.query.direction === 'asc' ? 'desc' : 'asc' }));
   root.querySelector('[data-cover-scale]')?.addEventListener('input', (event) => {
     document.documentElement.style.setProperty('--cover-scale', event.target.value);
-    localStorage.setItem('ludoteca:cover-scale', event.target.value);
+    localStorage.setItem('nebula:cover-scale', event.target.value);
   });
   root.querySelector('[data-clear-filters]')?.addEventListener('click', () => {
     updateQuery({ search: '', status: 'all', platform: 'all', tag: 'all', favorite: false, hidden: false });

@@ -16,7 +16,7 @@ export const state = {
   emulatorPresets: [],
   launcher: { sessions: {}, count: 0, log: [] },
   scan: { running: false, summary: null },
-  app: { version: '1.1.0', platform: 'linux', dataDir: '' },
+  app: { version: '', platform: '', dataDir: '' },
   view: 'library',
   query: {
     search: '',
@@ -69,7 +69,7 @@ export function toggleFavoriteFilter() {
 
 function persistQuery() {
   try {
-    localStorage.setItem('ludoteca:query', JSON.stringify(state.query));
+    localStorage.setItem('nebula:query', JSON.stringify(state.query));
   } catch {
     /* almacenamiento no disponible */
   }
@@ -77,7 +77,7 @@ function persistQuery() {
 
 export function restoreQuery() {
   try {
-    const raw = localStorage.getItem('ludoteca:query');
+    const raw = localStorage.getItem('nebula:query');
     if (!raw) return;
     const parsed = JSON.parse(raw);
     Object.assign(state.query, parsed, { search: '' });

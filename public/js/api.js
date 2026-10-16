@@ -62,6 +62,7 @@ export const api = {
   metadataSuggest: (name) => request(`/api/metadata/suggest${toQuery({ name })}`),
   metadataFill: (payload = {}) => request('/api/metadata/fill', { method: 'POST', body: payload }),
   applyMetadata: (gameId, payload) => request(`/api/games/${gameId}/metadata`, { method: 'POST', body: payload }),
+  retryMetadataArt: (gameId) => request(`/api/games/${gameId}/metadata-art`, { method: 'POST', body: {} }),
 
   sessions: (limit = 80) => request(`/api/sessions?limit=${limit}`),
   addSession: (payload) => request('/api/sessions', { method: 'POST', body: payload }),

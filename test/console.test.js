@@ -39,8 +39,8 @@ test('aAscii deja intacto el texto que ya es ASCII', () => {
 test('aAscii no deja pasar caracteres de otros alfabetos', () => {
   assert.equal(aAscii('错误'), '');
   assert.equal(aAscii('juego 错误 de 中文'), 'juego  de ');
-  assert.equal(aAscii('ludoteca ✓ jeu'), 'ludoteca ok jeu');
-  assert.match(aAscii('Ludoteca 1.0.0 ── ⓘ demostración'), /^[\x20-\x7e\n]*$/);
+  assert.equal(aAscii('nebula ✓ jeu'), 'nebula ok jeu');
+  assert.match(aAscii('Nébula 1.0.0 ── ⓘ demostración'), /^[\x20-\x7e\n]*$/);
 });
 
 test('prepararConsola respeta el modo forzado', () => {
@@ -68,7 +68,7 @@ test('el envoltorio deja en ASCII todo lo que se le escribe', () => {
 
 test('en modo ASCII se envuelven las funciones de console (una sola vez)', () => {
   prepararConsola({ forzar: 'ascii' });
-  assert.equal(console.__ludotecaAscii, true, 'la consola queda marcada como envuelta');
+  assert.equal(console.__nebulaAscii, true, 'la consola queda marcada como envuelta');
   const vez = console.log;
   prepararConsola({ forzar: 'ascii' });
   assert.equal(console.log, vez, 'no se envuelve dos veces');

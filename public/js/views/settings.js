@@ -130,7 +130,7 @@ export function renderSettings(root) {
     <div class="section-title"><h2>Acerca de</h2></div>
     <div class="panel">
       <dl class="kv">
-        <dt>Versión</dt><dd>${esc(app.version || '1.1.0')}</dd>
+        <dt>Versión</dt><dd>${esc(app.version || '—')}</dd>
         <dt>Sistema</dt><dd>${esc(app.platform || '')}</dd>
         <dt>Iniciada</dt><dd>${esc(app.startedAt ? relTime(app.startedAt) : '—')}</dd>
         <dt>Juegos</dt><dd>${state.facets.total}</dd>
@@ -197,7 +197,7 @@ function wire(root) {
   });
   root.querySelector('[data-cover-scale]')?.addEventListener('input', (event) => {
     document.documentElement.style.setProperty('--cover-scale', event.target.value);
-    localStorage.setItem('ludoteca:cover-scale', event.target.value);
+    localStorage.setItem('nebula:cover-scale', event.target.value);
   });
 
   root.querySelector('[data-action="add-root"]')?.addEventListener('click', addRoot);
@@ -241,7 +241,7 @@ function wire(root) {
 
   root.querySelector('[data-action="export"]')?.addEventListener('click', async () => {
     const payload = await api.exportAll();
-    downloadText(`ludoteca-${new Date().toISOString().slice(0, 10)}.json`, typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2));
+    downloadText(`nebula-${new Date().toISOString().slice(0, 10)}.json`, typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2));
     toast('Archivo descargado', { type: 'ok' });
   });
 

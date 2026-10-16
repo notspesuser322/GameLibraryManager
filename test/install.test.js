@@ -12,8 +12,9 @@ import os from 'node:os';
 import path from 'node:path';
 
 import {
-  NOMBRE, rutasInstalacion, scriptAccesosDirectos, scriptBorrarAccesosDirectos,
+  NOMBRE, NOMBRE_VISIBLE, rutasInstalacion, scriptAccesosDirectos, scriptBorrarAccesosDirectos,
   argumentosRegistro, argumentosBorrarRegistro, esModoInstalado, instalar, desinstalar, version,
+  lanzadorOculto,
 } from '../server/install.js';
 
 const WIN_ENV = { LOCALAPPDATA: 'C:\\Users\\Ana\\AppData\\Local', APPDATA: 'C:\\Users\\Ana\\AppData\\Roaming' };
@@ -24,11 +25,11 @@ const normalizar = (ruta) => path.normalize(ruta).split(/[\\/]/).join('/');
 
 test('las rutas de instalación van a la carpeta del usuario, sin pedir permisos', () => {
   const rutas = rutasWin();
-  assert.equal(normalizar(rutas.dir), 'C:/Users/Ana/AppData/Local/Programs/Ludoteca');
-  assert.equal(normalizar(rutas.exe), 'C:/Users/Ana/AppData/Local/Programs/Ludoteca/Ludoteca.exe');
-  assert.equal(normalizar(rutas.datos), 'C:/Users/Ana/AppData/Roaming/Ludoteca', 'los datos van a %APPDATA%');
+  assert.equal(normalizar(rutas.dir), 'C:/Users/Ana/AppData/Local/Programs/Nebula');
+  assert.equal(normalizar(rutas.exe), 'C:/Users/Ana/AppData/Local/Programs/Nebula/Nebula.exe');
+  assert.equal(normalizar(rutas.datos), 'C:/Users/Ana/AppData/Roaming/Nebula', 'los datos van a %APPDATA%');
   assert.match(normalizar(rutas.menu), /Roaming\/Microsoft\/Windows\/Start Menu\/Programs$/);
-  assert.equal(rutas.clave, 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Ludoteca');
+  assert.equal(rutas.clave, 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Nebula');
   assert.equal(rutas.platform, 'win32');
 });
 
@@ -38,9 +39,20 @@ test('los accesos directos se crean en el menú Inicio y en el escritorio', () =
   assert.match(script, /GetFolderPath\("Programs"\)/);
   assert.match(script, /GetFolderPath\("Desktop"\)/);
   assert.match(script, new RegExp(`${NOMBRE}\\.lnk`));
-  assert.match(script, /Ludoteca\.exe/, 'apunta al ejecutable instalado');
+  assert.match(script, /Nebula\.vbs/, 'usa el lanzador oculto, sin ventana de consola');
+  assert.match(script, /wscript\.exe/, 'lo abre con el intérprete de Windows');
+  assert.match(script, /Nebula\.exe,0/, 'toma el icono del programa');
   assert.match(script, /IconLocation/);
   assert.match(script, /\$lnk\.Save\(\)/);
+});
+
+test('el acceso directo abre Nébula sin la ventana negra de la consola', () => {
+  const vbs = lanzadorOculto();
+  assert.match(vbs, /WScript\.Shell/, 'usa el intérprete de Windows');
+  assert.match(vbs, /GetParentFolderName\(WScript\.ScriptFullName\)/, 'encuentra su propia carpeta');
+  const linea = vbs.split('\r\n').find((l) => l.startsWith('shell.Run'));
+  /* 0 = ventana oculta, False = no esperar a que termine */
+  assert.equal(linea, 'shell.Run """" & carpeta & "\\Nebula.exe""", 0, False');
 });
 
 test('el borrado de accesos directos es tolerante: solo quita lo que existe', () => {
@@ -51,11 +63,11 @@ test('el borrado de accesos directos es tolerante: solo quita lo que existe', ()
 
 test('el registro deja el programa en «Aplicaciones instaladas»', () => {
   const args = argumentosRegistro(rutasWin(), { version: '1.1.0', tamanoKb: 87000 }).join(' ');
-  assert.match(args, /^add "?HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Ludoteca/);
-  assert.match(args, /\/v DisplayName \/t REG_SZ \/d Ludoteca/);
+  assert.match(args, /^add "?HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Nebula/);
+  assert.match(args, new RegExp(`/v DisplayName /t REG_SZ /d ${NOMBRE_VISIBLE}`), 'el nombre visible lleva tilde');
   assert.match(args, /\/v DisplayVersion \/t REG_SZ \/d 1\.1\.0/);
-  assert.match(args, /\/v UninstallString \/t REG_SZ \/d ".*Ludoteca\.exe" --uninstall/);
-  assert.match(args, /\/v QuietUninstallString \/t REG_SZ \/d ".*Ludoteca\.exe" --uninstall --silent/);
+  assert.match(args, /\/v UninstallString \/t REG_SZ \/d ".*Nebula\.exe" --uninstall/);
+  assert.match(args, /\/v QuietUninstallString \/t REG_SZ \/d ".*Nebula\.exe" --uninstall --silent/);
   assert.match(args, /\/v EstimatedSize \/t REG_DWORD \/d 87000/);
   assert.match(args, /\/v InstallLocation/);
   assert.match(args, /\/f /, 'sobrescribe si ya existía');
@@ -68,13 +80,13 @@ test('la desinstalación borra la clave del registro', () => {
 });
 
 test('esModoInstalado distingue la copia instalada de la descargada', () => {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'ludoteca-inst-'));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'nebula-inst-'));
   try {
-    const dir = path.join(base, 'Programs', 'Ludoteca');
+    const dir = path.join(base, 'Programs', 'Nebula');
     fs.mkdirSync(dir, { recursive: true });
     const rutas = { dir };
-    assert.equal(esModoInstalado({ execPath: path.join(dir, 'Ludoteca.exe'), rutas }), true);
-    assert.equal(esModoInstalado({ execPath: path.join(base, 'Descargas', 'Ludoteca-Instalador.exe'), rutas }), false);
+    assert.equal(esModoInstalado({ execPath: path.join(dir, 'Nebula.exe'), rutas }), true);
+    assert.equal(esModoInstalado({ execPath: path.join(base, 'Descargas', 'Nebula-Instalador.exe'), rutas }), false);
     assert.equal(esModoInstalado({ execPath: path.join(dir, 'sub', 'x.exe'), rutas }), false);
   } finally {
     fs.rmSync(base, { recursive: true, force: true });

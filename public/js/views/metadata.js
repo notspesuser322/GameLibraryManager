@@ -96,7 +96,13 @@ export function renderMetadataPanel(game, rerender) {
             ? `<p class="tiny muted" style="margin:0 0 6px">Ficha actual: <b>${esc(SOURCE_LABELS[applied.source]?.label || applied.source)}</b> · ${esc(applied.title || '')}
                  ${applied.score ? `· ${Math.round(applied.score * 100)} %` : ''}${applied.url ? ` · <a href="${esc(applied.url)}" target="_blank" rel="noopener">ver original</a>` : ''}</p>`
             : '<p class="tiny muted" style="margin:0 0 6px">Este juego todavía no tiene ficha externa. Se puede escribir una a mano o buscarla aquí.</p>'}
-          <p class="tiny muted" style="margin:0">Fuentes abiertas y sin cuenta. Si no hay internet, la búsqueda avisa y la biblioteca sigue igual.</p>
+          ${applied?.imagenes?.cover
+            ? applied.imagenes.cover.ok
+              ? '<p class="tiny" style="margin:6px 0 0;color:var(--ok)">Carátula descargada correctamente.</p>'
+              : `<p class="tiny" style="margin:6px 0 0;color:var(--warn)">La carátula no se pudo descargar: ${esc(applied.imagenes.cover.error || 'motivo desconocido')}</p>
+                 <button class="btn small ghost mt" data-meta-retry-art>Reintentar la carátula</button>`
+            : ''}
+          <p class="tiny muted" style="margin:6px 0 0">Fuentes abiertas y sin cuenta. Si no hay internet, la búsqueda avisa y la biblioteca sigue igual.</p>
         </div>
       </div>
 
@@ -117,6 +123,9 @@ export function renderMetadataPanel(game, rerender) {
                   <b>${esc(candidate.title)}</b>
                   ${sourceBadge(candidate.source)}
                   ${candidate.extra?.dubious ? '<span class="pill" style="color:var(--warn)">poco seguro</span>' : ''}
+                  ${candidate.coverUrl || candidate.bannerUrl
+                    ? '<span class="pill" style="color:var(--ok)">con imagen</span>'
+                    : '<span class="pill" style="color:var(--muted-2)">solo datos</span>'}
                   ${scoreBar(candidate.score || 0)}
                 </div>
                 <p class="tiny muted meta-line">
@@ -256,6 +265,24 @@ export function wireMetadataPanel(root, game, rerender) {
   });
   root.querySelector('[data-meta-overwrite]')?.addEventListener('change', (event) => { panel.overwrite = event.target.checked; });
   root.querySelector('[data-meta-apply-selected]')?.addEventListener('click', applySelected);
+  root.querySelector('[data-meta-retry-art]')?.addEventListener('click', async (event) => {
+    const boton = event.currentTarget;
+    boton.disabled = true;
+    boton.textContent = 'Descargando…';
+    try {
+      const resultado = await api.retryMetadataArt(game.id);
+      const cover = resultado.cover || {};
+      if (cover.file) toast('Carátula descargada', { type: 'ok' });
+      else toast(cover.error || 'No se pudo descargar la carátula', { type: 'err', title: 'Sin carátula' });
+      await refresh({ quiet: true });
+      panels.delete(game.id);
+      rerender();
+    } catch (err) {
+      toast(err.message, { type: 'err' });
+      boton.disabled = false;
+      boton.textContent = 'Reintentar la carátula';
+    }
+  });
   queryInput?.addEventListener('keydown', (event) => { if (event.key === 'Enter') runSearch(); });
 }
 
@@ -263,13 +290,18 @@ async function apply(game, candidate, panel, rerender) {
   const button = document.querySelector('#modal-root [data-meta-apply-selected]');
   if (button) { button.disabled = true; button.textContent = 'Descargando…'; }
   try {
-    await api.applyMetadata(game.id, {
+    const respuesta = await api.applyMetadata(game.id, {
       candidate,
       fields: panel.fields,
       overwrite: panel.overwrite,
       downloadArt: state.settings?.fetchRemoteArt !== false,
     });
-    toast(`Ficha de «${candidate.title}» aplicada`, { type: 'ok', title: SOURCE_LABELS[candidate.source]?.label || candidate.source });
+    const imagenes = respuesta?.game?.extra?.metadata?.imagenes?.cover;
+    if (imagenes && !imagenes.ok) {
+      toast(`Ficha aplicada, pero la carátula no: ${imagenes.error || 'motivo desconocido'}`, { type: 'err', title: SOURCE_LABELS[candidate.source]?.label || candidate.source });
+    } else {
+      toast(`Ficha de «${candidate.title}» aplicada`, { type: 'ok', title: SOURCE_LABELS[candidate.source]?.label || candidate.source });
+    }
     await refresh({ quiet: true });
     panels.delete(game.id);
     rerender();

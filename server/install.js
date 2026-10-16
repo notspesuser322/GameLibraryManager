@@ -8,10 +8,10 @@
  * borra sola.
  *
  * Todo es por usuario (no pide permisos de administrador):
- *   programa   %LOCALAPPDATA%\Programs\Ludoteca
+ *   programa   %LOCALAPPDATA%\Programs\Nebula
  *   menú       %APPDATA%\Microsoft\Windows\Start Menu\Programs
- *   registro   HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\Ludoteca
- *   datos      %APPDATA%\Ludoteca  (se conservan al desinstalar)
+ *   registro   HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\Nébula
+ *   datos      %APPDATA%\Nébula  (se conservan al desinstalar)
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -19,8 +19,9 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { VERSION } from './version.js';
 
-export const NOMBRE = 'Ludoteca';
-export const CLAVE_REGISTRO = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Ludoteca';
+export const NOMBRE = 'Nebula';          /* carpeta y ejecutable, sin tildes */
+export const NOMBRE_VISIBLE = 'Nébula';  /* lo que se ve en Windows */
+export const CLAVE_REGISTRO = `HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${NOMBRE}`;
 
 export function version() {
   return VERSION;
@@ -39,6 +40,7 @@ export function rutasInstalacion({
     dir,
     exe: path.join(dir, `${NOMBRE}.exe`),
     lanzador: path.join(dir, `${NOMBRE}.cmd`),
+    lanzadorOculto: path.join(dir, `${NOMBRE}.vbs`),
     menu: path.join(roaming, 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
     escritorio: path.join(homedir, 'Desktop'),
     datos: path.join(roaming, NOMBRE),
@@ -47,15 +49,37 @@ export function rutasInstalacion({
   };
 }
 
+/**
+ * Contenido del lanzador oculto (VBS).
+ * Sirve para que al abrir Nébula desde el acceso directo no aparezca la ventana
+ * negra de la consola: el programa se abre como cualquier aplicación de Windows.
+ */
+export function lanzadorOculto() {
+  /* las comillas dobles dentro de una cadena de VBS se escriben duplicadas */
+  const orden = 'shell.Run """" & carpeta & "\\Nebula.exe""", 0, False';
+  return [
+    "' Abre Nebula sin mostrar la ventana de consola.",
+    'Set fso = CreateObject("Scripting.FileSystemObject")',
+    'carpeta = fso.GetParentFolderName(WScript.ScriptFullName)',
+    'Set shell = CreateObject("WScript.Shell")',
+    'shell.CurrentDirectory = carpeta',
+    orden,
+    '',
+  ].join('\r\n');
+}
+
 /** Devuelve el script de PowerShell que crea los dos accesos directos. */
 export function scriptAccesosDirectos(rutas) {
+  /* el acceso directo apunta al lanzador oculto, con el icono del programa */
+  const wscript = '%SystemRoot%\\System32\\wscript.exe';
   return [
     '$ErrorActionPreference = "Stop"',
     '$shell = New-Object -ComObject WScript.Shell',
     'foreach ($base in @([Environment]::GetFolderPath("Programs"), [Environment]::GetFolderPath("Desktop"))) {',
     '  if (-not $base) { continue }',
     `  $lnk = $shell.CreateShortcut((Join-Path $base "${NOMBRE}.lnk"))`,
-    `  $lnk.TargetPath = "${rutas.exe}"`,
+    `  $lnk.TargetPath = "${wscript}"`,
+    `  $lnk.Arguments = '"${rutas.lanzadorOculto}"'`,
     `  $lnk.WorkingDirectory = "${rutas.dir}"`,
     `  $lnk.IconLocation = "${rutas.exe},0"`,
     `  $lnk.Description = "Biblioteca de juegos"`,
@@ -81,10 +105,10 @@ export function argumentosRegistro(rutas, datos = {}) {
   const v = datos.version || version();
   const tamanoKb = datos.tamanoKb || null;
   const pares = [
-    ['DisplayName', NOMBRE],
+    ['DisplayName', NOMBRE_VISIBLE],
     ['DisplayVersion', v],
-    ['Publisher', 'Ludoteca'],
-    ['DisplayIcon', rutas.exe],
+    ['Publisher', 'Nebula'],
+    ['DisplayIcon', `${rutas.exe},0`],
     ['InstallLocation', rutas.dir],
     ['UninstallString', `"${rutas.exe}" --uninstall`],
     ['QuietUninstallString', `"${rutas.exe}" --uninstall --silent`],
@@ -193,9 +217,10 @@ export async function instalar({ origen = process.execPath, silencioso = false, 
     if (!silencioso) escribir(`  Programa:  ${rutas.dir}`);
   }
 
-  /* 2. un lanzador de consola por si se prefiere la línea de comandos */
-  const lanzador = `@echo off\r\ntitle Ludoteca\r\ncd /d "%~dp0"\r\nLudoteca.exe %*\r\n`;
+  /* 2. lanzador de consola (opcional) y lanzador oculto que usan los accesos directos */
+  const lanzador = `@echo off\r\ntitle ${NOMBRE_VISIBLE}\r\ncd /d "%~dp0"\r\n${NOMBRE}.exe %*\r\n`;
   fs.writeFileSync(rutas.lanzador, lanzador, 'latin1');
+  fs.writeFileSync(rutas.lanzadorOculto, lanzadorOculto(), 'latin1');
 
   /* 3. accesos directos en el menú Inicio y en el escritorio */
   try {
@@ -215,11 +240,11 @@ export async function instalar({ origen = process.execPath, silencioso = false, 
 
   if (!silencioso) {
     escribir(`  Datos:     ${rutas.datos}`);
-    escribir(`\n  Listo. Abre «${NOMBRE}» desde el menú Inicio o el escritorio.\n`);
+    escribir(`\n  Listo. Abre «${NOMBRE_VISIBLE}» desde el menú Inicio o el escritorio.\n`);
   }
 
   if (abrirAlTerminar && !silencioso) {
-    if (preguntar(NOMBRE, `${NOMBRE} ${version()} se instaló correctamente.\\n\\n¿Quieres abrirla ahora?`)) abrir(rutas);
+    if (preguntar(NOMBRE_VISIBLE, `${NOMBRE_VISIBLE} ${version()} se instaló correctamente.\\n\\n¿Quieres abrirla ahora?`)) abrir(rutas);
   } else if (abrirAlTerminar) {
     abrir(rutas);
   }
@@ -228,18 +253,22 @@ export async function instalar({ origen = process.execPath, silencioso = false, 
 
 /**
  * Desinstala: quita accesos, registro y carpeta del programa.
- * Los datos del usuario (%APPDATA%\Ludoteca) se conservan salvo que se pida lo contrario.
+ * Los datos del usuario (%APPDATA%\Nébula) se conservan salvo que se pida lo contrario.
  */
 export async function desinstalar({ silencioso = false, borrarDatos = false, rutas = rutasInstalacion() } = {}) {
   if (rutas.platform !== 'win32' || process.platform !== 'win32') {
     throw new Error('La desinstalación es para Windows.');
   }
-  if (!silencioso) escribir(`\n  Quitando ${NOMBRE}…\n`);
+  if (!silencioso) escribir(`\n  Quitando ${NOMBRE_VISIBLE}…\n`);
 
   try {
     powershell(scriptBorrarAccesosDirectos());
     if (!silencioso) escribir('  Accesos directos eliminados');
   } catch { /* si no estaban, da igual */ }
+
+  try {
+    fs.rmSync(rutas.lanzadorOculto, { force: true });
+  } catch { /* ya no estaba */ }
 
   try {
     ejecutar('reg.exe', argumentosBorrarRegistro(rutas), { silencioso: true });
@@ -266,7 +295,7 @@ export async function desinstalar({ silencioso = false, borrarDatos = false, rut
   }
 
   if (!silencioso) {
-    escribir(`\n  ${NOMBRE} se quitó del equipo.`);
+    escribir(`\n  ${NOMBRE_VISIBLE} se quitó del equipo.`);
     if (!borrarDatos) escribir(`  Tu biblioteca sigue en ${rutas.datos} por si quieres volver a instalarlo.\n`);
   }
   return true;

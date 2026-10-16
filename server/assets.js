@@ -3,8 +3,8 @@
  *
  * El mismo código debe funcionar de tres formas distintas:
  *   1. Desde el repositorio:  node server/index.js
- *   2. Empaquetado en un ZIP: Ludoteca.exe con la interfaz en ./app
- *   3. Instalado en Windows:  C:\Program Files\Ludoteca\Ludoteca.exe con la interfaz en .\app
+ *   2. Empaquetado en un ZIP: Nebula.exe con la interfaz en ./app
+ *   3. Instalado en Windows:  C:\Program Files\Nébula\Nebula.exe con la interfaz en .\app
  *
  * Los datos del usuario nunca se escriben junto al programa instalado (en
  * Windows eso fallaría por permisos): si la app está empaquetada se guardan en
@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SOURCE_ROOT = path.resolve(HERE, '..');
 
-export const APP_NAME = 'Ludoteca';
+export const APP_NAME = 'Nebula';
 
 function flagValue(argv, name) {
   for (let i = 0; i < argv.length; i++) {
@@ -49,7 +49,7 @@ export function userDataDir({ env = process.env, platform = process.platform, ho
 export function resolveAssets({ argv = process.argv.slice(2), execPath = process.execPath, env = process.env } = {}) {
   const candidates = [];
   const fromFlag = flagValue(argv, '--assets');
-  if (env.LUDOTECA_ASSETS) candidates.push(env.LUDOTECA_ASSETS);
+  if (env.NEBULA_ASSETS) candidates.push(env.NEBULA_ASSETS);
   if (fromFlag) candidates.push(fromFlag);
   const exeDir = path.dirname(execPath);
   candidates.push(path.join(exeDir, 'app'));                 /* zip o instalación */
@@ -64,7 +64,7 @@ export function resolveAssets({ argv = process.argv.slice(2), execPath = process
     if (existsSync(path.join(root, 'public', 'index.html'))) {
       /* el marcador .packaged lo escriben los scripts de distribución */
       const marked = existsSync(path.join(root, '.packaged'));
-      const packaged = marked || root !== SOURCE_ROOT || env.LUDOTECA_PACKAGED === '1';
+      const packaged = marked || root !== SOURCE_ROOT || env.NEBULA_PACKAGED === '1';
       return {
         root,
         publicDir: path.join(root, 'public'),
@@ -87,7 +87,7 @@ export function resolveAssets({ argv = process.argv.slice(2), execPath = process
 export function resolveDataDir({ assets, argv = process.argv.slice(2), env = process.env } = {}) {
   const fromFlag = flagValue(argv, '--data-dir');
   if (fromFlag) return path.resolve(fromFlag);
-  if (env.LUDOTECA_DATA_DIR) return path.resolve(env.LUDOTECA_DATA_DIR);
+  if (env.NEBULA_DATA_DIR) return path.resolve(env.NEBULA_DATA_DIR);
   if (assets?.packaged) return userDataDir({ env });
   return path.join(assets?.root || SOURCE_ROOT, 'data');
 }

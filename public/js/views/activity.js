@@ -74,7 +74,7 @@ export function renderActivity(root) {
               <div class="dur">${esc(fmtDuration(session.seconds, 'long'))}</div>
             </div>`).join('')}
         </div>`
-      : emptyState('Sin sesiones todavía', 'Cuando abras un juego desde Ludoteca, la sesión se registra automáticamente aquí.')}
+      : emptyState('Sin sesiones todavía', 'Cuando abras un juego desde Nébula, la sesión se registra automáticamente aquí.')}
 
     <div class="section-title"><h2>Más jugados</h2></div>
     ${(stats?.top || []).length

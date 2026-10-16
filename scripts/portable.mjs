@@ -159,7 +159,7 @@ export function readZip(buffer) {
  * Script que Node ejecuta al arrancar el .exe. Extrae el ZIP en la caché del
  * usuario y arranca el servidor. Debe ser JS válido sin depender de nada.
  */
-export const LAUNCHER_SOURCE = String.raw`/* Ludoteca — lanzador del ejecutable autocontenido */
+export const LAUNCHER_SOURCE = String.raw`/* Nébula — lanzador del ejecutable autocontenido */
 'use strict';
 const fs = require('fs');
 const os = require('os');
@@ -168,7 +168,7 @@ const zlib = require('zlib');
 const crypto = require('crypto');
 
 function fail(message) {
-  process.stderr.write('\n  Ludoteca no pudo iniciar: ' + message + '\n\n');
+  process.stderr.write('\n  Nébula no pudo iniciar: ' + message + '\n\n');
   process.exit(1);
 }
 
@@ -204,7 +204,7 @@ try {
   }
 
   const stamp = crypto.createHash('sha1').update(String(self.length) + ':' + String(count)).digest('hex').slice(0, 12);
-  const target = path.join(os.tmpdir(), 'ludoteca-' + stamp);
+  const target = path.join(os.tmpdir(), 'nebula-' + stamp);
   const marker = path.join(target, '.listo');
 
   if (!fs.existsSync(marker)) {
@@ -220,7 +220,7 @@ try {
     fs.writeFileSync(marker, String(Date.now()));
   }
 
-  process.env.LUDOTECA_PACKAGED = '1';
+  process.env.NEBULA_PACKAGED = '1';
   const entry = path.join(target, 'server', 'index.js');
   if (!fs.existsSync(entry)) fail('falta el archivo principal en el paquete');
 

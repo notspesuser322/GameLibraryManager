@@ -41,8 +41,8 @@ async function api(pathname, { method = 'GET', body, raw = false } = {}) {
 before(async () => {
   const port = await freePort();
   base = `http://127.0.0.1:${port}`;
-  dataDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'ludoteca-api-'));
-  fixtureDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'ludoteca-games-'));
+  dataDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'nebula-api-'));
+  fixtureDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'nebula-games-'));
   await fsp.mkdir(path.join(fixtureDir, 'Juego de Prueba'), { recursive: true });
   await fsp.writeFile(path.join(fixtureDir, 'Juego de Prueba', 'JuegoDePrueba.exe'), 'MZ');
   await fsp.writeFile(path.join(fixtureDir, 'Juego de Prueba', 'unins000.exe'), 'MZ');
@@ -78,7 +78,7 @@ test('salud del servicio y datos básicos', async () => {
   const { status, payload } = await api('/api/health');
   assert.equal(status, 200);
   assert.equal(payload.ok, true);
-  assert.equal(payload.app, 'ludoteca');
+  assert.equal(payload.app, 'nebula');
   assert.equal(payload.platform, process.platform);
   assert.equal(payload.mode, 'normal');
 });
@@ -87,7 +87,7 @@ test('sirve la interfaz y no deja salir de public/', async () => {
   const home = await fetch(`${base}/`);
   assert.equal(home.status, 200);
   const html = await home.text();
-  assert.match(html, /<title>Ludoteca/);
+  assert.match(html, /<title>Nébula/);
   assert.match(html, /\/js\/app\.js/);
 
   const css = await fetch(`${base}/styles.css`);
@@ -295,9 +295,9 @@ test('carátulas: subida, servicio y vuelta a la generada', async () => {
 test('exportar e importar la biblioteca', async () => {
   const exported = await api('/api/export', { raw: true });
   assert.equal(exported.status, 200);
-  assert.match(exported.headers.get('content-disposition') || '', /ludoteca/);
+  assert.match(exported.headers.get('content-disposition') || '', /nebula/);
   const payload = await exported.json();
-  assert.equal(payload.app, 'ludoteca');
+  assert.equal(payload.app, 'nebula');
   assert.ok(Array.isArray(payload.games));
   const count = payload.games.length;
   assert.ok(count >= 2);

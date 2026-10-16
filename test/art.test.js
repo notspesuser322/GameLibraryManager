@@ -40,7 +40,7 @@ test('dos juegos distintos generan caratulas distintas y estables', () => {
 });
 
 test('MediaStore resuelve archivos locales, genera SVG y aplica subidas', async () => {
-  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'ludoteca-art-'));
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'nebula-art-'));
   const media = new MediaStore(dir);
   await media.init();
 
@@ -71,7 +71,7 @@ test('MediaStore resuelve archivos locales, genera SVG y aplica subidas', async 
 });
 
 test('MediaStore respeta la opcion de no descargar arte remoto', async () => {
-  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'ludoteca-art3-'));
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'nebula-art3-'));
   const media = new MediaStore(dir);
   await media.init();
   const game = { id: 'g_off', name: 'Sin red', coverUrl: 'https://cdn.invalido/cover.jpg' };
@@ -80,7 +80,7 @@ test('MediaStore respeta la opcion de no descargar arte remoto', async () => {
 });
 
 test('MediaStore ignora URLs remotas invalidas sin romper', async () => {
-  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'ludoteca-art2-'));
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'nebula-art2-'));
   const media = new MediaStore(dir);
   await media.init();
   const result = await media.download('g_x', 'no-es-una-url');

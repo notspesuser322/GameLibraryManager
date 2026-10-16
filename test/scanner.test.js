@@ -14,7 +14,7 @@ import {
 import { walk } from '../server/util.js';
 
 async function fixture() {
-  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'ludoteca-scan-'));
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'nebula-scan-'));
   return dir;
 }
 

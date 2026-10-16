@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Descarga el binario oficial de Node para Windows x64 usando el registro de
- * npm (paquete `node-win-x64`). Sirve para construir Ludoteca.exe desde Linux o
+ * npm (paquete `node-win-x64`). Sirve para construir Nebula.exe desde Linux o
  * macOS, donde no hay node.exe disponible.
  *
  *   node scripts/fetch-node-win.mjs              → versión LTS de referencia
@@ -10,7 +10,7 @@
  *
  * Después:
  *
- *   node scripts/build-sea.mjs --runtime <carpeta>/package/bin/node.exe --out dist/Ludoteca.exe
+ *   node scripts/build-sea.mjs --runtime <carpeta>/package/bin/node.exe --out dist/Nebula.exe
  */
 import fs from 'node:fs';
 import path from 'node:path';

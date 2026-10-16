@@ -27,7 +27,7 @@ if (sea && typeof sea.isSea === 'function' && sea.isSea()) {
   const keys = typeof sea.getAssetKeys === 'function' ? sea.getAssetKeys() : [];
   if (keys.length) {
     const stamp = crypto.createHash('sha1').update(`${keys.length}:${keys.join(',')}`).digest('hex').slice(0, 12);
-    const target = path.join(os.tmpdir(), `ludoteca-${stamp}`);
+    const target = path.join(os.tmpdir(), `nebula-${stamp}`);
     const marker = path.join(target, '.listo');
     if (!fs.existsSync(marker)) {
       try {
@@ -45,7 +45,7 @@ if (sea && typeof sea.isSea === 'function' && sea.isSea()) {
         } catch { /* sin salida disponible */ }
       }
     }
-    process.env.LUDOTECA_ASSETS = target;
+    process.env.NEBULA_ASSETS = target;
   }
-  process.env.LUDOTECA_PACKAGED = '1';
+  process.env.NEBULA_PACKAGED = '1';
 }

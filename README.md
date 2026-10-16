@@ -1,4 +1,4 @@
-# Ludoteca
+# Nébula
 
 Gestor de biblioteca de juegos para tu equipo: reúne en un solo lugar lo que tienes
 instalado en distintos lanzadores, mide cuánto juegas y organiza la colección con
@@ -8,9 +8,9 @@ Proyecto propio, pensado para uso personal y privado. Funciona **sin dependencia
 externas**: solo necesita Node.js. No hay cuentas, ni nube, ni telemetría.
 
 ```
-Ludoteca-1.1.0-instalador.exe  →  doble clic; se instala y abre tu biblioteca
-Ludoteca-1.1.0-portable.zip    →  descomprimir y abrir Ludoteca.exe
-npm start                      →  http://localhost:4337 (ejecutándolo desde el código)
+Nebula-1.2.0-instalador.exe  →  doble clic; se instala y abre Nébula en su ventana
+Nebula-1.2.0-portable.zip    →  descomprimir y abrir Nebula.exe
+npm start                    →  http://localhost:4337 (ejecutándolo desde el código)
 ```
 
 ---
@@ -38,7 +38,14 @@ npm start                      →  http://localhost:4337 (ejecutándolo desde e
 
 - **Node.js 18 o superior** (probado en Node 22). No hace falta `npm install`.
 - Windows, macOS o Linux.
-- Un navegador moderno (la interfaz se sirve como app web local).
+- Chrome o Edge para la ventana propia de la aplicación (si no hay ninguno, la interfaz se abre
+  en el navegador de siempre).
+
+Nébula se comporta como un programa de escritorio: abre **su propia ventana**, sin barra de
+direcciones ni pestañas, con su icono en la barra de tareas, y se cierra al cerrar esa ventana.
+Por dentro usa ese navegador en «modo aplicación» (`--app=`), así que la ventana es nativa, rápida
+y no hay que instalar ni Electron ni nada parecido. La dirección `http://localhost:4337` sigue
+disponible si quieres abrirlo también en el navegador o desde el celular.
 
 ## Puesta en marcha
 
@@ -47,23 +54,27 @@ npm start                      →  http://localhost:4337 (ejecutándolo desde e
 Los dos archivos llevan dentro todo lo necesario: no hace falta instalar Node ni nada más.
 Se publican solos en **Releases** en cada cambio.
 
-**Instalador (lo más cómodo).** Descarga `Ludoteca-<versión>-instalador.exe` y haz doble clic.
+**Instalador (lo más cómodo).** Descarga `Nebula-<versión>-instalador.exe` y haz doble clic.
 Se instala en tu carpeta de usuario, sin pedir permisos de administrador, y además:
 
 - crea los accesos directos en el menú Inicio y en el escritorio;
 - aparece en **Aplicaciones instaladas** para quitarlo cuando quieras (o con
-  `Ludoteca.exe --uninstall`, o `--uninstall --silent` para hacerlo sin diálogos);
+  `Nebula.exe --uninstall`, o `--uninstall --silent` para hacerlo sin diálogos);
 - al terminar te pregunta si quieres abrirlo.
 
 El instalador y el programa son el mismo archivo: la copia instalada detecta dónde está y arranca
 la biblioteca en lugar de instalarse otra vez.
 
-**Portable.** Descarga `Ludoteca-<versión>-portable.zip`, descomprímelo y abre `Ludoteca.exe`
+**Portable.** Descarga `Nebula-<versión>-portable.zip`, descomprímelo y abre `Nebula.exe`
 desde donde lo tengas. No se instala nada en el sistema.
 
-En los dos casos los datos van a `%APPDATA%\Ludoteca` (no junto al programa) y se conservan si
-reinstalas o desinstalas. Se abre el navegador en `http://localhost:4337`, y desde la terminal
-sirve el mismo ejecutable: `Ludoteca.exe --port 4400 --demo`.
+En los dos casos los datos van a `%APPDATA%\Nebula` (no junto al programa) y se conservan si
+reinstalas o desinstalas. Se abre la ventana de la aplicación en `http://localhost:4337`, y desde
+la terminal sirve el mismo ejecutable: `Nebula.exe --port 4400 --demo`.
+
+El instalador crea los accesos directos apuntando a un lanzador oculto (`Nebula.vbs`), de modo que
+al abrir Nébula desde el menú Inicio o el escritorio **no aparece la ventana negra de la consola**:
+se abre directamente la ventana de la aplicación.
 
 ### Publicación automática (una sola vez)
 
@@ -90,35 +101,35 @@ Si prefieres hacerlo desde la web de GitHub: abre `ci/build.yml`, copia todo el 
 
 ```bash
 npm start                  # inicia en http://localhost:4337
-npm start -- --open        # además abre el navegador
+npm start -- --open        # además abre la ventana de la aplicación
 npm start -- --port 5000   # otro puerto
 npm run demo               # arranca con una biblioteca de ejemplo (40 juegos ficticios)
 
-npm test                   # ejecuta la batería de pruebas (82 pruebas)
+npm test                   # ejecuta la batería de pruebas (104 pruebas)
 ```
 
-También están **`iniciar.bat`** (Windows) e **`iniciar.sh`** (macOS/Linux) como atajo:
-comprueban que Node esté instalado, arrancan la app y abren el navegador
-(`./iniciar.sh --demo --port 5000`).
+En macOS y Linux hay además **`iniciar.sh`** como atajo: comprueba que Node esté instalado,
+arranca la app y abre la ventana de la aplicación (`./iniciar.sh --demo --port 5000`).
+En Windows no hace falta ningún archivo de por medio: es el propio `Nebula.exe`.
 
 ### Construir los ejecutables tú mismo
 
 Con el Node del sistema (para Linux, macOS o Windows):
 
 ```bash
-npm install --no-save esbuild postject
-node scripts/build-sea.mjs --modo portable  --runtime "$(command -v node)" --out dist/Ludoteca.exe
-node scripts/build-sea.mjs --modo instalador --runtime "$(command -v node)" --out dist/Ludoteca-Instalador.exe
+npm install --no-save esbuild postject resedit
+node scripts/build-sea.mjs --modo portable  --runtime "$(command -v node)" --out dist/Nebula.exe
+node scripts/build-sea.mjs --modo instalador --runtime "$(command -v node)" --out dist/Nebula-Instalador.exe
 ```
 
 Para los ejecutables **de Windows desde Linux o macOS** (trae el node.exe oficial a través del
 registro de npm, así que no hace falta Windows ni la web de Node):
 
 ```bash
-npm install --no-save esbuild postject
+npm install --no-save esbuild postject resedit
 node scripts/fetch-node-win.mjs
-node scripts/build-sea.mjs --modo portable  --runtime dist/node-win/package/bin/node.exe --out dist/Ludoteca.exe
-node scripts/build-sea.mjs --modo instalador --runtime dist/node-win/package/bin/node.exe --out dist/Ludoteca-Instalador.exe
+node scripts/build-sea.mjs --modo portable  --runtime dist/node-win/package/bin/node.exe --out dist/Nebula.exe
+node scripts/build-sea.mjs --modo instalador --runtime dist/node-win/package/bin/node.exe --out dist/Nebula-Instalador.exe
 ```
 
 El resultado es un único archivo con el servidor, la interfaz y la documentación dentro. Al
@@ -133,12 +144,18 @@ Opciones de línea de comandos:
 | `--host <addr>` | Interfaz de escucha (por defecto `0.0.0.0`, así también entra desde el celular en tu red) |
 | `--data-dir <dir>` | Carpeta de datos (por defecto `./data`) |
 | `--demo` | Carga la biblioteca de ejemplo al iniciar |
-| `--open` | Abre el navegador automáticamente |
-| `--no-open` | No abre el navegador |
+| `--open` | Abre la ventana de la aplicación al iniciar (con `--app=` si hay Chrome o Edge) |
+| `--no-open` | No abre nada: solo arranca el servidor |
+| `--browser` | Fuerza el navegador de siempre en vez de la ventana propia |
+| `--keep-alive` | No se cierra al cerrar la ventana (útil desde la terminal) |
 | `--version`, `-v` | Muestra la versión y termina |
 
-Variables de entorno: `LUDOTECA_PORT`, `LUDOTECA_HOST`, `LUDOTECA_DATA_DIR` y
-`LUDOTECA_CONSOLE` (ver más abajo).
+Al hacer doble clic en el ejecutable (o abrirlo desde el acceso directo) se abre la ventana de la
+aplicación y, al cerrarla, el programa termina solo. Si hay un juego en marcha cuando cierras la
+ventana, Nébula espera a que termine para no perder el tiempo jugado.
+
+Variables de entorno: `NEBULA_PORT`, `NEBULA_HOST`, `NEBULA_DATA_DIR` y
+`NEBULA_CONSOLE` (ver más abajo).
 
 ### Guía rápida (2 minutos)
 
@@ -221,8 +238,16 @@ Orden de prioridad para cada juego:
 
 1. Imagen local (`cover.jpg`, `folder.png`, `hero.jpg`, `banner.png`, `icon.ico`…).
 2. Imagen que subas tú (arrastra un archivo sobre la tarjeta o la ficha, o usa **Subir imagen**).
-3. Descarga desde el CDN de la tienda (solo Steam; **se puede desactivar** en Ajustes).
+3. Descarga de fuentes reales (**se puede desactivar** en Ajustes): CDN de Steam
+   (`library_600x900`, `_2x`, `header`, `capsule_616x353`…) y Wikimedia/Wikipedia
+   (`Special:FilePath`, la miniatura del artículo y su `og:image`).
 4. Carátula SVG generada: color derivado del nombre, patrón propio, plataforma y título.
+
+La descarga no se fía del código de respuesta: **comprueba que lo que llega sea una imagen de
+verdad** (tipo de contenido y primeros bytes). Si la fuente devuelve una página HTML con un 200, se
+descarta y se prueba la siguiente dirección; si ninguna sirve, la interfaz dice el motivo concreto
+(«la fuente respondió 404», «lo que devolvió la fuente no es una imagen», «la descarga tardó
+demasiado») y sigues teniendo la carátula generada.
 
 ## Metadatos automáticos
 
@@ -245,13 +270,19 @@ de crítica y **carátula**.
 - Botones relacionados en **Ajustes → Metadatos**: *Comprobar fuentes* (mide si responden y
   cuánto tardan) y *Rellenar huecos automáticamente* (hasta 8 juegos sin descripción o carátula).
   También se puede pedir el relleno automático al agregar juegos nuevos.
+- La ficha y la carátula se descargan por separado: la ficha lleva el texto (descripción,
+  géneros, fechas…), que suele estar en Wikipedia/Wikidata, y la carátula se busca en las
+  direcciones de imagen de Steam y Wikimedia hasta que una devuelve una imagen válida. Por eso
+  puede pasar que lleguen los datos y la carátula no: en la pestaña verás **con imagen** o
+  **solo datos**, con el motivo cuando falla, y un botón **Reintentar la carátula** que vuelve a
+  intentarlo sin tocar el resto de la ficha.
 - Si no hay internet, la búsqueda lo dice y la biblioteca sigue funcionando igual: las fichas
   que ya estaban guardadas no se tocan y el arte generado sigue cubriendo las carátulas.
 
 ### Si la consola se ve rara en Windows
 
 La consola de Windows no siempre usa UTF-8, y entonces los acentos y los adornos
-(`─`, `ⓘ`, `…`) se ven como símbolos de otra codificación —letras chinas incluidas—. Ludoteca
+(`─`, `ⓘ`, `…`) se ven como símbolos de otra codificación —letras chinas incluidas—. Nébula
 lo detecta al arrancar, intenta pasar la consola a UTF-8 y, si no lo consigue, escribe en
 texto simple:
 
@@ -264,10 +295,10 @@ Puedes forzarlo cuando quieras:
 
 | Valor | Qué hace |
 | --- | --- |
-| `LUDOTECA_CONSOLE=ascii` | Escribe sin acentos ni adornos (lo más seguro en cualquier consola) |
-| `LUDOTECA_CONSOLE=utf8` | Escribe con acentos y adornos, sin tocar la configuración de la consola |
+| `NEBULA_CONSOLE=ascii` | Escribe sin acentos ni adornos (lo más seguro en cualquier consola) |
+| `NEBULA_CONSOLE=utf8` | Escribe con acentos y adornos, sin tocar la configuración de la consola |
 
-En Windows: `set LUDOTECA_CONSOLE=ascii` antes de abrir el programa.
+En Windows: `set NEBULA_CONSOLE=ascii` antes de abrir el programa.
 
 ## Privacidad y datos
 
@@ -277,8 +308,8 @@ En Windows: `set LUDOTECA_CONSOLE=ascii` antes de abrir el programa.
   activada la opción *Descargar carátulas de las tiendas*, se pide la imagen al CDN de Steam y se
   guarda en caché local; y si usas la pestaña *Metadatos*, se consulta Wikipedia, Wikidata o
   Steam con el nombre del juego. Ambas se pueden desactivar y todo se resuelve con tus datos.
-- En el ejecutable, los datos viven en `%APPDATA%\Ludoteca` (o `~/.local/share/ludoteca` en
-  Linux, `~/Library/Application Support/Ludoteca` en macOS). Desde el código, en `data/`.
+- En el ejecutable, los datos viven en `%APPDATA%\Nébula` (o `~/.local/share/nebula` en
+  Linux, `~/Library/Application Support/Nébula` en macOS). Desde el código, en `data/`.
 - Exporta e importa toda la biblioteca en JSON desde **Ajustes → Datos**.
 - El servidor escucha en `0.0.0.0`, así que cualquiera en tu red local puede abrir la interfaz
   con `http://tu-ip:4337`. Si prefieres que no sea accesible, inicia con `--host 127.0.0.1`.
@@ -315,7 +346,8 @@ Toda la interfaz usa esta API local (JSON). Útil para automatizar o integrar co
 | `GET /api/metadata/suggest?name=` | Mejor candidato automático para un nombre |
 | `GET /api/metadata/providers` | Comprueba qué fuentes responden |
 | `POST /api/metadata/fill` | Rellena huecos de hasta N juegos (`{gameIds, limit, overwrite}`) |
-| `POST /api/games/:id/metadata` | Aplica una ficha (`{candidate, fields, overwrite, downloadArt}`) |
+| `POST /api/games/:id/metadata` | Aplica una ficha (`{candidate, fields, overwrite, downloadArt}`) y devuelve `imagenes.{cover,banner}` con el resultado de cada descarga |
+| `POST /api/games/:id/metadata-art` | Vuelve a intentar solo las imágenes de una ficha ya guardada (`{candidate, kind}`) |
 | `GET\|PATCH /api/settings` | Ajustes |
 | `GET /api/export` · `POST /api/import` | Copia de seguridad completa (`mode: merge\|replace`) |
 | `POST\|DELETE /api/demo` | Cargar o quitar la biblioteca de ejemplo |
@@ -328,13 +360,16 @@ server/
   assets.js    rutas de la app: funcionan igual desde el código y dentro del ejecutable
   console.js   salida por consola legible en cualquier codificación (Windows incluido)
   install.js   instalación y desinstalación en Windows (accesos directos, registro)
+  desktop.js   ventana propia de la aplicación (Chrome/Edge en modo aplicación, WebView en Windows)
+  http.js      cabeceras de las peticiones a las fuentes externas (agente e imagen de referencia)
   version.js   la versión, en un solo sitio
   sea.js       extrae la interfaz incrustada cuando corre como ejecutable único
   metadata.js  búsqueda de fichas: Wikipedia, Wikidata, Steam y RAWG
   store.js     almacén JSON con escritura atómica, respaldos, sesiones y estadísticas
   scanner.js   detección de Steam/Epic/GOG/Heroic/Lutris, carpetas, ROMs y puntuación de ejecutables
   launcher.js  lanzamiento de procesos y vigilancia de sesiones
-  art.js       carátulas generadas (SVG), caché de descargas y subidas
+  art.js       carátulas: descarga desde las fuentes (con comprobación de imagen), generadas (SVG),
+               caché y subidas
   demo.js      biblioteca de ejemplo reproducible
   util.js      utilidades: rutas, procesos, permisos, formato
 public/
@@ -352,7 +387,6 @@ ci/build.yml   flujo de trabajo listo: copiar a .github/workflows/ para activarl
 data/          tus datos (ignorado por git)
 dist/          resultado de las construcciones (ignorado por git)
 LEEME.txt      instrucciones para quien recibe el ejecutable
-iniciar.bat    arranque de un clic en Windows (alternativa al ejecutable)
 iniciar.sh     arranque de un clic en macOS/Linux
 ```
 
@@ -370,8 +404,11 @@ metadatos usan respuestas simuladas de las fuentes, así que funcionan sin conex
 comprueban el análisis de cada proveedor, el orden por parecido, el respaldo entre idiomas, la
 tolerancia a fuentes caídas y la regla de "no pisar lo que ya escribiste". Otras ocho
 comprueban que la salida por consola queda legible incluso cuando la consola usa una
-codificación antigua, y ocho cubren la instalación en Windows (rutas, accesos directos,
-registro y detección de "ya instalado").
+codificación antigua, nueve cubren la instalación en Windows (rutas, accesos directos con el
+lanzador sin consola, registro y detección de "ya instalado"), trece comprueban la descarga de
+carátulas contra fuentes simuladas (imagen válida, HTML con respuesta 200, 404, tiempo agotado,
+respaldo entre direcciones) y ocho el modo ventana (detección de navegador, argumentos de la
+ventana, apertura, cierre del programa al cerrar la ventana y `--keep-alive`).
 
 ## Limitaciones conocidas
 
@@ -384,3 +421,6 @@ registro y detección de "ya instalado").
 - Los metadatos vienen de fuentes abiertas (Wikipedia, Wikidata, Steam y, con clave, RAWG); no
   hay catálogos comerciales (IGDB y similares) ni búsqueda en Google. Para juegos muy nuevos o
   poco documentados puede no haber ficha: en ese caso se escribe a mano desde la pestaña Editar.
+- La carátula descargada depende de que la fuente tenga imagen del juego: si ninguna la tiene, se
+  queda la carátula generada (que siempre existe) y siempre puedes subir una tuya arrastrándola
+  sobre la tarjeta.

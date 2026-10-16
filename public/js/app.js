@@ -169,7 +169,7 @@ $$('#nav .nav-item').forEach((button) => {
 $('#btn-menu')?.addEventListener('click', () => document.body.classList.toggle('sidebar-open'));
 $('#btn-collapse')?.addEventListener('click', () => {
   document.body.classList.toggle('sidebar-collapsed');
-  localStorage.setItem('ludoteca:sidebar', document.body.classList.contains('sidebar-collapsed') ? '1' : '0');
+  localStorage.setItem('nebula:sidebar', document.body.classList.contains('sidebar-collapsed') ? '1' : '0');
 });
 
 $('#side-statuses').addEventListener('click', (event) => {
@@ -377,12 +377,12 @@ async function boot() {
   document.body.dataset.background = 'aurora';
   syncViewModeButton();
 
-  const savedScale = localStorage.getItem('ludoteca:cover-scale');
+  const savedScale = localStorage.getItem('nebula:cover-scale');
   if (savedScale) {
     state.query.coverScale = Number(savedScale);
     document.documentElement.style.setProperty('--cover-scale', savedScale);
   }
-  if (localStorage.getItem('ludoteca:sidebar') === '1') document.body.classList.add('sidebar-collapsed');
+  if (localStorage.getItem('nebula:sidebar') === '1') document.body.classList.add('sidebar-collapsed');
 
   try {
     await refresh();
@@ -410,7 +410,7 @@ async function boot() {
   if (!state.games.length) {
     setTimeout(() => {
       toast('La biblioteca está vacía. Prueba “Buscar juegos”, o carga la biblioteca de ejemplo desde Ajustes.', {
-        title: 'Bienvenido a Ludoteca', timeout: 9000,
+        title: 'Bienvenido a Nébula', timeout: 9000,
       });
     }, 700);
   }

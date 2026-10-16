@@ -19,16 +19,16 @@ const silencioso = tiene('--silent') || tiene('-s') || tiene('--silencioso');
 
 async function principal() {
   if (tiene('--version') || tiene('-v')) {
-    console.log(`ludoteca ${version()}`);
+    console.log(`nebula ${version()}`);
     return;
   }
   if (tiene('--help') || tiene('-h')) {
-    console.log(`Ludoteca ${version()} — instalador
+    console.log(`Nébula ${version()} — instalador
 
 Uso:
-  Ludoteca-Instalador.exe              instala el programa y lo abre
-  Ludoteca-Instalador.exe --silent     instala sin dialogos
-  Ludoteca-Instalador.exe --uninstall  quita el programa del equipo
+  Nebula-Instalador.exe              instala el programa y lo abre
+  Nebula-Instalador.exe --silent     instala sin dialogos
+  Nebula-Instalador.exe --uninstall  quita el programa del equipo
 
 Una vez instalado, se usa el programa desde el menu Inicio o el escritorio.`);
     return;

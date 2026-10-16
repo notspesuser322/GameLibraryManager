@@ -382,7 +382,7 @@ export class Store extends EventEmitter {
   exportPayload() {
     /* copia profunda: el archivo exportado no debe seguir cambiando con la app */
     return structuredClone({
-      app: 'ludoteca',
+      app: 'nebula',
       version: 1,
       exportedAt: nowIso(),
       settings: this.db.settings,

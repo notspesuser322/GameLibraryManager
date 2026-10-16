@@ -8,6 +8,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { colorFromText, exists, hash, normalize, titleCase, ensureDir } from './util.js';
 import { PLATFORMS } from './store.js';
+import { cabecerasImagen, pareceImagen, extensionDeImagen } from './http.js';
 
 export const MIME = {
   /* imagenes */
@@ -242,40 +243,87 @@ export class MediaStore {
    * Se usa para traer caratulas oficiales desde los CDN de las tiendas
    * (una sola vez) y que la biblioteca funcione sin conexion.
    */
-  async download(gameId, url, kind = 'cover') {
+  /**
+   * Descarga una imagen y la guarda como carátula o fondo del juego.
+   * @returns {Promise<string|null>} ruta del archivo guardado
+   */
+  async download(gameId, url, kind = 'cover', { referer = null, timeout = 15000 } = {}) {
     if (!url || !/^https?:\/\//i.test(url)) return null;
     const folder = kind === 'banner' ? this.banners : this.covers;
-    const key = `${gameId}`;
-    const cached = this.pending.get(key + kind);
+    const key = `${gameId}:${kind}:${url}`;
+    const cached = this.pending.get(key);
     if (cached) return cached;
 
     const task = (async () => {
       try {
         const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 12000);
+        const timer = setTimeout(() => controller.abort(), timeout);
         const res = await fetch(url, {
           signal: controller.signal,
-          headers: { 'user-agent': 'Ludoteca/1.0 (+library manager)', accept: 'image/*' },
+          redirect: 'follow',
+          headers: cabecerasImagen({ referer }),
         });
         clearTimeout(timer);
-        if (!res.ok) return null;
-        const type = res.headers.get('content-type') || '';
-        if (!type.startsWith('image/')) return null;
-        const ext = type.includes('png') ? '.png' : type.includes('webp') ? '.webp' : type.includes('svg') ? '.svg' : '.jpg';
+        if (!res.ok) {
+          this.ultimoError = `la fuente respondió ${res.status}`;
+          return null;
+        }
+        const tipo = (res.headers.get('content-type') || '').split(';')[0].trim();
         const buffer = Buffer.from(await res.arrayBuffer());
-        if (buffer.length < 512 || buffer.length > 12 * 1024 * 1024) return null;
+        /* primero se mira el contenido: algunos servicios devuelven una página de
+           error con código 200 y el aviso debe decir eso, no «está vacía» */
+        if (!pareceImagen(buffer)) {
+          this.ultimoError = 'lo que devolvió la fuente no es una imagen';
+          return null;
+        }
+        if (buffer.length < 512) {
+          this.ultimoError = 'la imagen llegó vacía o es demasiado pequeña';
+          return null;
+        }
+        if (buffer.length > 15 * 1024 * 1024) {
+          this.ultimoError = 'la imagen es demasiado grande (más de 15 MB)';
+          return null;
+        }
+        void tipo;
+        const ext = extensionDeImagen(buffer, tipo);
         const file = path.join(folder, `${gameId}${kind === 'banner' ? '-bg' : ''}${ext}`);
         await fsp.writeFile(file, buffer);
+        this.ultimoError = null;
         return file;
-      } catch {
+      } catch (err) {
+        this.ultimoError = err.name === 'AbortError' ? 'la descarga tardó demasiado' : `no se pudo conectar (${err.message})`;
         return null;
       } finally {
-        this.pending.delete(key + kind);
+        this.pending.delete(key);
       }
     })();
 
-    this.pending.set(key + kind, task);
+    this.pending.set(key, task);
     return task;
+  }
+
+  /**
+   * Prueba varias direcciones en orden hasta que una funcione.
+   * @param {string} gameId
+   * @param {Array<{url: string, referer?: string}>} opciones
+   * @param {'cover'|'banner'} kind
+   * @returns {Promise<{file: string|null, url: string|null, error: string|null, intentos: number}>}
+   */
+  async downloadBest(gameId, opciones = [], kind = 'cover') {
+    const lista = opciones.filter((o) => o && o.url).slice(0, 6);
+    const fallos = [];
+    for (const opcion of lista) {
+      const file = await this.download(gameId, opcion.url, kind, { referer: opcion.referer });
+      if (file) return { file, url: opcion.url, error: null, intentos: fallos.length + 1 };
+      const motivo = this.ultimoError || 'sin respuesta';
+      fallos.push(`${new URL(opcion.url).host}: ${motivo}`);
+    }
+    return {
+      file: null,
+      url: lista[0]?.url || null,
+      error: lista.length ? fallos.join(' · ') : 'la ficha no traía ninguna imagen',
+      intentos: lista.length,
+    };
   }
 
   /* ------------------------------------------------------------- resolucion */

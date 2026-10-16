@@ -11,7 +11,7 @@ import fsp from 'node:fs/promises';
 import { Store, normalizeGame } from '../server/store.js';
 
 async function tempStore() {
-  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'ludoteca-store-'));
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'nebula-store-'));
   const store = new Store(path.join(dir, 'biblioteca.json'));
   await store.load();
   return { store, dir };
@@ -170,7 +170,7 @@ test('import/export: fusionar y reemplazar', async () => {
   await store.add({ name: 'Uno', platform: 'steam' });
   const payload = store.exportPayload();
   assert.equal(payload.games.length, 1);
-  assert.equal(payload.app, 'ludoteca');
+  assert.equal(payload.app, 'nebula');
 
   await store.add({ name: 'Dos', platform: 'gog' });
   const merged = await store.importPayload({ games: [{ name: 'Tres', platform: 'epic' }] });

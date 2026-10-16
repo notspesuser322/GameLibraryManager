@@ -1,5 +1,5 @@
 /**
- * Ludoteca — gestor de biblioteca de juegos.
+ * Nébula — gestor de biblioteca de juegos.
  * Servidor HTTP sin dependencias externas: API + interfaz web.
  *
  *   node server/index.js                 inicia en http://localhost:4337
@@ -25,6 +25,7 @@ import { MetadataService, buildPatch } from './metadata.js';
 import { VERSION as VERSION_APP } from './version.js';
 import { resolveAssets, resolveDataDir } from './assets.js';
 import { prepararConsola } from './console.js';
+import { abrirVentana, hayEntornoGrafico, navegadorDisponible, ventanaAbierta, avisar } from './desktop.js';
 
 /* lo primero: dejar la consola en condiciones (en Windows evita que los acentos
    y los adornos se vean como caracteres de otra codificación) */
@@ -45,10 +46,12 @@ const DOCS_DIR = assets.docsDir;
 
 function parseArgs(argv) {
   const args = {
-    port: Number(process.env.LUDOTECA_PORT || process.env.PORT) || 4337,
-    host: process.env.LUDOTECA_HOST || process.env.HOST || '0.0.0.0',
+    port: Number(process.env.NEBULA_PORT || process.env.PORT) || 4337,
+    host: process.env.NEBULA_HOST || process.env.HOST || '0.0.0.0',
     demo: false,
     open: false,
+    browser: false,
+    keepAlive: false,
     dataDir: null,
   };
   for (let i = 0; i < argv.length; i++) {
@@ -58,6 +61,8 @@ function parseArgs(argv) {
     else if (arg === '--demo') args.demo = true;
     else if (arg === '--open') args.open = true;
     else if (arg === '--no-open') args.open = false;
+    else if (arg === '--browser' || arg === '--navegador') args.browser = true;
+    else if (arg === '--keep-alive') args.keepAlive = true;
     else if (arg === '--data-dir') args.dataDir = argv[++i];
     else if (arg === '--version' || arg === '-v') args.version = true;
     else if (arg === '--help' || arg === '-h') args.help = true;
@@ -66,16 +71,17 @@ function parseArgs(argv) {
 }
 
 const args = parseArgs(process.argv.slice(2));
-/* doble clic en el ejecutable: sin argumentos se abre el navegador */
+/* doble clic en el ejecutable: sin argumentos se abre la ventana de la app */
 const SIN_ARGUMENTOS = process.argv.slice(2).length === 0;
-if (SIN_ARGUMENTOS && process.env.LUDOTECA_PACKAGED === '1' && !process.argv.includes('--no-open')) args.open = true;
+if (SIN_ARGUMENTOS && process.env.NEBULA_PACKAGED === '1' && !process.argv.includes('--no-open')) args.open = true;
+/* al arrancar sin consola visible tampoco tiene sentido esperar nada del teclado */
 if (args.version) {
   /* útil para comprobar una compilación desde la integración continua */
-  console.log(`ludoteca ${VERSION}`);
+  console.log(`nebula ${VERSION}`);
   process.exit(0);
 }
 if (args.help) {
-  console.log(`Ludoteca ${VERSION}
+  console.log(`Nébula ${VERSION}
 
 Uso: node server/index.js [opciones]
 
@@ -83,13 +89,15 @@ Uso: node server/index.js [opciones]
   --host <addr>     interfaz de escucha (por defecto 0.0.0.0)
   --data-dir <dir>  carpeta de datos (por defecto ./data)
   --demo            carga la biblioteca de ejemplo al iniciar
-  --open            abre el navegador automaticamente
+  --open            abre la aplicacion en su ventana al iniciar
+  --browser         abre en el navegador en vez de en la ventana propia
+  --keep-alive      no se cierra al cerrar la ventana
   --version, -v     muestra la version y termina
 
 Variables de entorno:
-  LUDOTECA_PORT     puerto (igual que --port)
-  LUDOTECA_HOST     interfaz de escucha (igual que --host)
-  LUDOTECA_DATA_DIR carpeta de datos (igual que --data-dir)
+  NEBULA_PORT     puerto (igual que --port)
+  NEBULA_HOST     interfaz de escucha (igual que --host)
+  NEBULA_DATA_DIR carpeta de datos (igual que --data-dir)
 `);
   process.exit(0);
 }
@@ -100,6 +108,12 @@ const DATA_DIR = resolveDataDir({ assets });
 const store = new Store(path.join(DATA_DIR, 'biblioteca.json'));
 const media = new MediaStore(path.join(DATA_DIR, 'media'));
 const metadata = new MetadataService({ getSettings: () => store.settings });
+let peticionesCliente = 0;      /* peticiones recibidas desde que arrancó */
+let ventanaAbiertaEn = 0;       /* cuándo se abrió la ventana de la aplicación */
+
+/* tiempos de la vigilancia de la ventana (ajustables para las pruebas) */
+const ESPERA_MINIMA_VENTANA = Number(process.env.NEBULA_VENTANA_ESPERA) || 20000;
+const INTERVALO_VIGILANCIA = Number(process.env.NEBULA_VENTANA_INTERVALO) || 3000;
 let launcher = null;
 
 async function bootstrap() {
@@ -107,7 +121,7 @@ async function bootstrap() {
   await media.init();
   await store.load();
 
-  if (args.demo || process.env.LUDOTECA_DEMO === '1') {
+  if (args.demo || process.env.NEBULA_DEMO === '1') {
     await loadDemo();
   }
 
@@ -272,6 +286,89 @@ function filteredGames(query) {
   return games;
 }
 
+/* -------------------------------------------------------------- apertura */
+
+/**
+ * Abre la interfaz: en su propia ventana si se puede, en el navegador si no.
+ * Se informa por consola de cuál se usó para que no haya sorpresas.
+ */
+function abrirAplicacion(url) {
+  if (!args.open) return;
+  if (!hayEntornoGrafico()) {
+    console.log('  (sin entorno grafico: abre la interfaz en un navegador)');
+    return;
+  }
+  const resultado = abrirVentana(url, { forzarNavegador: Boolean(args.browser), log: (m) => console.log(`  ${m}`) });
+  if (resultado.modo === 'ventana') {
+    console.log(`  Ventana:    ${resultado.detalle}${resultado.pid ? ` (proceso ${resultado.pid})` : ''}`);
+    vigilarVentana(resultado.pid);
+  } else if (resultado.modo === 'web') {
+    console.log(`  Aviso:      no se encontro Chrome ni Edge; se abre ${resultado.detalle}`);
+    console.log('              para tener ventana propia instala Chrome o Edge');
+  }
+}
+
+/**
+ * Se cierra cuando el usuario cierra la ventana, como cualquier aplicación.
+ * Si hay un juego en marcha se espera a que termine para no perder el tiempo
+ * jugado; el resto de las veces se sale en unos segundos.
+ * Se puede desactivar con --keep-alive (útil al usarlo desde la terminal).
+ */
+function vigilarVentana(pid) {
+  if (!pid || args.keepAlive) return;
+  ventanaAbiertaEn = Date.now();
+  let ausencias = 0;
+  let avisado = false;
+  let esperandoJuegos = false;   /* la ventana ya se cerró, pero hay un juego en marcha */
+  const reloj = setInterval(() => {
+    /* márgenes de seguridad: no se cierra el programa si la ventana todavía no
+       cargó la interfaz (el proceso del navegador puede desaparecer al delegar
+       en otra instancia) ni en los primeros segundos de vida */
+    if (Date.now() - ventanaAbiertaEn < ESPERA_MINIMA_VENTANA || peticionesCliente === 0) return;
+
+    const abierta = ventanaAbierta(pid);
+    if (abierta === null || abierta === true) {
+      ausencias = 0;
+      return;
+    }
+    ausencias++;
+    /* tres comprobaciones seguidas (unos 9 s): un recargado no cierra el programa */
+    if (ausencias < 3) return;
+
+    const activos = launcher ? Object.keys(launcher.status().sessions || {}).length : 0;
+    if (activos > 0) {
+      esperandoJuegos = true;
+      if (!avisado) {
+        console.log(`\n  La ventana se cerro, pero hay ${activos} juego(s) en marcha: se sigue contando el tiempo.`);
+        avisado = true;
+      }
+      return; /* se espera a que termine el juego */
+    }
+
+    console.log(esperandoJuegos
+      ? '\n  Los juegos terminaron: cerrando el programa.'
+      : '\n  La ventana se cerro: cerrando el programa.');
+    cerrarYsalir().catch(() => {});
+  }, INTERVALO_VIGILANCIA);
+  reloj.unref?.();
+}
+
+/** Cierra el servidor y termina el proceso con orden. */
+async function cerrarYsalir(codigo = 0) {
+  /* se cierran las sesiones siguiendo el mismo camino que el botón «Detener todo» */
+  try {
+    for (const gameId of [...(launcher?.running?.keys() || [])]) {
+      await launcher.stopGame(gameId).catch(() => {});
+    }
+  } catch { /* sin sesiones que parar */ }
+  try {
+    serverInstance?.close(() => process.exit(codigo));
+    setTimeout(() => process.exit(codigo), 1500).unref?.();
+  } catch {
+    process.exit(codigo);
+  }
+}
+
 /* --------------------------------------------------------------- metadatos */
 
 /**
@@ -280,18 +377,35 @@ function filteredGames(query) {
  */
 async function applyMetadata(game, candidate, { fields = {}, overwrite = false, downloadArt = true } = {}) {
   const patch = buildPatch(candidate, fields, { overwrite, current: game });
-  if (candidate.coverUrl && downloadArt && store.settings.fetchRemoteArt !== false) {
-    const cover = await media.download(game.id, candidate.coverUrl, 'cover');
-    if (cover) patch.coverFile = cover;
-    if (candidate.bannerUrl) {
-      const banner = await media.download(game.id, candidate.bannerUrl, 'banner');
-      if (banner) patch.backgroundFile = banner;
+  const arte = { cover: null, banner: null };
+
+  const puedeDescargar = downloadArt && store.settings.fetchRemoteArt !== false
+    && store.settings.metadata?.enabled !== false;
+
+  if (puedeDescargar) {
+    /* se prueban varias direcciones por ficha: si una falla, se intenta la siguiente */
+    const caratulas = await metadata.coverOptions(candidate, { kind: 'cover' }).catch(() => []);
+    if (caratulas.length) {
+      const resultado = await media.downloadBest(game.id, caratulas, 'cover');
+      arte.cover = { ok: Boolean(resultado.file), url: resultado.url, error: resultado.error, intentos: resultado.intentos };
+      if (resultado.file) patch.coverFile = resultado.file;
+      else patch.coverUrl = resultado.url;
+    } else {
+      arte.cover = { ok: false, url: null, error: 'la ficha no traía ninguna imagen', intentos: 0 };
     }
-    if (!cover) patch.coverUrl = candidate.coverUrl;
-    if (!patch.backgroundFile && candidate.bannerUrl) patch.backgroundUrl = candidate.bannerUrl;
-  } else if (candidate.coverUrl) {
-    patch.coverUrl = candidate.coverUrl;
+
+    const fondos = await metadata.coverOptions(candidate, { kind: 'banner' }).catch(() => []);
+    if (fondos.length) {
+      const resultado = await media.downloadBest(game.id, fondos, 'banner');
+      arte.banner = { ok: Boolean(resultado.file), url: resultado.url, error: resultado.error, intentos: resultado.intentos };
+      if (resultado.file) patch.backgroundFile = resultado.file;
+      else patch.backgroundUrl = resultado.url;
+    }
+  } else {
+    /* descargas desactivadas: se guarda la dirección para que se pueda usar luego */
+    if (candidate.coverUrl) patch.coverUrl = candidate.coverUrl;
     if (candidate.bannerUrl) patch.backgroundUrl = candidate.bannerUrl;
+    arte.cover = { ok: false, url: candidate.coverUrl || null, error: 'las descargas están desactivadas en Ajustes', intentos: 0 };
   }
 
   patch.extra = {
@@ -304,6 +418,16 @@ async function applyMetadata(game, candidate, { fields = {}, overwrite = false, 
       website: candidate.website || null,
       score: candidate.score ?? null,
       screenshots: candidate.screenshots || [],
+      imagenes: arte,
+      candidate: {
+        source: candidate.source,
+        id: candidate.id || null,
+        title: candidate.title,
+        coverUrl: candidate.coverUrl || null,
+        bannerUrl: candidate.bannerUrl || null,
+        url: candidate.url || null,
+        extra: candidate.extra || {},
+      },
       fetchedAt: nowIso(),
     },
   };
@@ -445,6 +569,8 @@ async function importFindings(findings, options = {}) {
 
 const server = http.createServer(async (req, res) => {
   const started = Date.now();
+  /* sirve para saber si la ventana llegó a cargar la interfaz (ver vigilarVentana) */
+  peticionesCliente++;
   const parsed = url.parse(req.url, true);
   const pathname = decodeURIComponent(parsed.pathname || '/');
   const query = new URLSearchParams(parsed.query);
@@ -469,7 +595,7 @@ const server = http.createServer(async (req, res) => {
     if (!res.headersSent) error(res, 500, err.message || 'Error interno');
     else res.end();
   } finally {
-    if (process.env.LUDOTECA_LOG === '1') {
+    if (process.env.NEBULA_LOG === '1') {
       console.log(`${req.method} ${pathname} ${res.statusCode} ${Date.now() - started}ms`);
     }
   }
@@ -484,7 +610,7 @@ async function handleApi(req, res, pathname, query) {
   if (resource === 'health') {
     return json(res, 200, {
       ok: true,
-      app: 'ludoteca',
+      app: 'nebula',
       version: VERSION,
       platform: process.platform,
       hostname: os.hostname(),
@@ -499,7 +625,14 @@ async function handleApi(req, res, pathname, query) {
   if (resource === 'state') {
     const games = filteredGames(query).map(publicGame);
     return json(res, 200, {
-      app: { version: VERSION, platform: process.platform, dataDir: DATA_DIR, startedAt: bootTime, packaged: assets.packaged },
+      app: {
+        version: VERSION,
+        platform: process.platform,
+        dataDir: DATA_DIR,
+        startedAt: bootTime,
+        packaged: assets.packaged,
+        ventana: hayEntornoGrafico() && Boolean(navegadorDisponible()) && !args.browser ? 'aplicacion' : 'navegador',
+      },
       games,
       facets: store.facets(),
       stats: store.stats(),
@@ -625,6 +758,39 @@ async function handleApi(req, res, pathname, query) {
       } catch (err) {
         return error(res, 400, err.message);
       }
+    }
+
+    if (action === 'metadata-art' && method === 'POST') {
+      /* reintenta la descarga de carátula y fondo con la ficha ya guardada */
+      const guardado = game.extra?.metadata?.candidate || null;
+      const candidato = guardado || {
+        source: game.extra?.metadata?.source || 'manual',
+        title: game.extra?.metadata?.title || game.name,
+        coverUrl: game.coverUrl || null,
+        bannerUrl: game.backgroundUrl || null,
+        url: game.extra?.metadata?.url || null,
+        extra: {},
+      };
+      const caratulas = await metadata.coverOptions(candidato, { kind: 'cover' }).catch(() => []);
+      const fondos = await metadata.coverOptions(candidato, { kind: 'banner' }).catch(() => []);
+      const cover = caratulas.length ? await media.downloadBest(game.id, caratulas, 'cover') : { file: null, url: null, error: 'no hay direcciones que probar', intentos: 0 };
+      const banner = fondos.length ? await media.downloadBest(game.id, fondos, 'banner') : { file: null, url: null, error: 'no hay direcciones que probar', intentos: 0 };
+      const patch = {
+        extra: {
+          ...(game.extra || {}),
+          metadata: {
+            ...(game.extra?.metadata || {}),
+            candidate: candidato,
+            imagenes: { cover: { ok: Boolean(cover.file), url: cover.url, error: cover.error, intentos: cover.intentos },
+                        banner: { ok: Boolean(banner.file), url: banner.url, error: banner.error, intentos: banner.intentos } },
+          },
+        },
+      };
+      if (cover.file) patch.coverFile = cover.file;
+      if (banner.file) patch.backgroundFile = banner.file;
+      const actualizado = await store.update(game.id, patch);
+      await store.flush();
+      return json(res, 200, { game: publicGame(actualizado), cover, banner });
     }
 
     if (action === 'detect-art' && method === 'POST') {
@@ -961,7 +1127,7 @@ async function handleApi(req, res, pathname, query) {
   if (resource === 'export') {
     res.writeHead(200, {
       'content-type': 'application/json; charset=utf-8',
-      'content-disposition': `attachment; filename="ludoteca-${new Date().toISOString().slice(0, 10)}.json"`,
+      'content-disposition': `attachment; filename="nebula-${new Date().toISOString().slice(0, 10)}.json"`,
     });
     return res.end(JSON.stringify(store.exportPayload(), null, 2));
   }
@@ -1030,6 +1196,12 @@ async function serveStatic(req, res, pathname) {
     const docsTarget = path.join(DOCS_DIR, rest || 'capturas.html');
     if (!isInside(DOCS_DIR, docsTarget)) return error(res, 403, 'Ruta no permitida');
     return sendFile(res, docsTarget);
+  }
+
+  /* el navegador pide /favicon.ico aunque el icono se declare en el HTML */
+  if (pathname === '/favicon.ico') {
+    const icono = path.join(PUBLIC_DIR, 'img', 'icono.ico');
+    if (await fsp.stat(icono).catch(() => null)) return sendFile(res, icono);
   }
 
   const relative = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
@@ -1106,16 +1278,23 @@ async function main() {
   await bootstrap();
   serverInstance = server.listen(args.port, args.host, () => {
     const shown = args.host === '0.0.0.0' ? 'localhost' : args.host;
-    console.log(`\n  Ludoteca ${VERSION}`);
+    console.log(`\n  Nébula ${VERSION}`);
     console.log(`  ──────────────────────────────────`);
     console.log(`  Biblioteca: ${store.list().length} juegos · datos en ${DATA_DIR}`);
     console.log(`  Interfaz:   http://${shown}:${args.port}`);
     if (args.host === '0.0.0.0') console.log(`  Red local:  http://<tu-ip>:${args.port}`);
     console.log(`  Detener:    Ctrl+C\n`);
-    if (args.open) util.openExternal(`http://localhost:${args.port}`).catch(() => {});
+    if (args.open) abrirAplicacion(`http://localhost:${args.port}`);
   });
 
   serverInstance.on('error', (err) => {
+    /* si la consola está oculta hay que avisar con una ventana del sistema */
+    if (err.code === 'EADDRINUSE') {
+      avisar('Nébula', `El puerto ${args.port} está ocupado por otro programa.\n\n` +
+        'Puedes abrir Nébula con otro puerto desde una terminal:\n' +
+        `    Nebula.exe --port ${args.port + 1}\n\n` +
+        'Si ya tienes Nébula abierto, cierra esa ventana antes de volver a abrirlo.', { forzar: true });
+    }
     if (err.code === 'EADDRINUSE') {
       console.error(`\n  ✖ El puerto ${args.port} esta ocupado. Prueba: node server/index.js --port ${args.port + 1}\n`);
     } else {

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * Crea el ejecutable autocontenido de Ludoteca.
+ * Crea el ejecutable autocontenido de Nébula.
  *
- *   node scripts/build-portable.mjs --runtime node.exe --out dist/Ludoteca.exe
+ *   node scripts/build-portable.mjs --runtime node.exe --out dist/Nebula.exe
  *
  * El resultado no necesita Node instalado: lleva dentro el binario y la app.
  * Se usa desde GitHub Actions con el node.exe oficial de Windows, pero sirve
@@ -22,7 +22,7 @@ function arg(name, fallback = null) {
 }
 
 const runtime = arg('runtime');
-const out = path.resolve(arg('out', path.join(ROOT, 'dist', process.platform === 'win32' ? 'Ludoteca.exe' : 'ludoteca')));
+const out = path.resolve(arg('out', path.join(ROOT, 'dist', process.platform === 'win32' ? 'Nebula.exe' : 'nebula')));
 const appDir = path.resolve(arg('app', path.join(ROOT, 'dist', 'app')));
 const skipBuild = process.argv.includes('--no-build');
 

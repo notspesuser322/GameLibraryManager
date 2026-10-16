@@ -12,11 +12,11 @@
 #
 # Que hace en cada push:
 #   1. ejecuta la bateria de pruebas;
-#   2. construye Ludoteca.exe (portable) y Ludoteca-Instalador.exe;
+#   2. construye Nebula.exe (portable) y Nebula-Instalador.exe;
 #   3. comprueba de verdad que el portable arranca y responde;
 #   4. instala el programa con el instalador, comprueba accesos directos y
 #      registro, lo abre, lo desinstala y verifica que no quede nada;
-#   5. publica los dos archivos en Releases con su etiqueta (v1.1.0) y las notas
+#   5. publica los dos archivos en Releases con su etiqueta (vX.Y.Z) y las notas
 #      generadas a partir de los commits;
 #   6. los deja tambien como artefactos descargables.
 name: Construir ejecutable
@@ -55,7 +55,7 @@ jobs:
           node-version: '22'
 
       - name: Herramientas de empaquetado
-        run: npm install --no-save --no-audit --no-fund esbuild postject
+        run: npm install --no-save --no-audit --no-fund esbuild postject resedit
 
       - name: Version publicada
         id: version
@@ -70,20 +70,20 @@ jobs:
         run: |
           $node = (Get-Command node).Source
           Write-Host "Binario de Node: $node"
-          node scripts/build-sea.mjs --modo portable  --runtime "$node" --out "dist/Ludoteca.exe"
-          node scripts/build-sea.mjs --modo instalador --runtime "$node" --out "dist/Ludoteca-Instalador.exe"
+          node scripts/build-sea.mjs --modo portable  --runtime "$node" --out "dist/Nebula.exe"
+          node scripts/build-sea.mjs --modo instalador --runtime "$node" --out "dist/Nebula-Instalador.exe"
           Get-ChildItem dist/*.exe | Format-Table Name, Length
 
       - name: Comprobar el portable
         shell: pwsh
         run: |
-          $version = & "dist/Ludoteca.exe" --version
+          $version = & "dist/Nebula.exe" --version
           Write-Host "Respuesta: $version"
-          if ($version -notmatch 'ludoteca') { throw 'El ejecutable no responde a --version' }
+          if ($version -notmatch 'nebula') { throw 'El ejecutable no responde a --version' }
 
-          $process = Start-Process -FilePath "dist/Ludoteca.exe" `
-            -ArgumentList @('--port', '4399', '--host', '127.0.0.1', '--data-dir', "$env:TEMP\ludoteca-ci", '--demo', '--no-open') `
-            -PassThru -RedirectStandardOutput "$env:TEMP\ludoteca.log" -RedirectStandardError "$env:TEMP\ludoteca.err"
+          $process = Start-Process -FilePath "dist/Nebula.exe" `
+            -ArgumentList @('--port', '4399', '--host', '127.0.0.1', '--data-dir', "$env:TEMP\nebula-ci", '--demo', '--no-open') `
+            -PassThru -RedirectStandardOutput "$env:TEMP\nebula.log" -RedirectStandardError "$env:TEMP\nebula.err"
           try {
             $ok = $false
             foreach ($i in 1..30) {
@@ -94,7 +94,7 @@ jobs:
               } catch { }
             }
             if (-not $ok) {
-              Get-Content "$env:TEMP\ludoteca.log", "$env:TEMP\ludoteca.err" -ErrorAction SilentlyContinue | Write-Host
+              Get-Content "$env:TEMP\nebula.log", "$env:TEMP\nebula.err" -ErrorAction SilentlyContinue | Write-Host
               throw 'El servidor del ejecutable no respondio'
             }
             $state = Invoke-RestMethod -Uri 'http://127.0.0.1:4399/api/state' -TimeoutSec 10
@@ -107,19 +107,30 @@ jobs:
       - name: Instalar, comprobar y desinstalar
         shell: pwsh
         run: |
-          $programa = Join-Path $env:LOCALAPPDATA 'Programs\Ludoteca'
-          $acceso   = Join-Path ([Environment]::GetFolderPath('Programs')) 'Ludoteca.lnk'
-          $clave    = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Ludoteca'
+          $programa = Join-Path $env:LOCALAPPDATA 'Programs\Nebula'
+          $acceso   = Join-Path ([Environment]::GetFolderPath('Programs')) 'Nebula.lnk'
+          $clave    = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Nebula'
 
           Write-Host '== Instalando en silencio =='
-          $instalador = Start-Process -FilePath "dist/Ludoteca-Instalador.exe" -ArgumentList '--silent' -PassThru -Wait
+          $instalador = Start-Process -FilePath "dist/Nebula-Instalador.exe" -ArgumentList '--silent' -PassThru -Wait
           Start-Sleep -Seconds 3
 
-          if (-not (Test-Path (Join-Path $programa 'Ludoteca.exe'))) { throw 'No se copio el programa' }
+          if (-not (Test-Path (Join-Path $programa 'Nebula.exe'))) { throw 'No se copio el programa' }
           Write-Host ("Programa instalado en {0}" -f $programa)
 
           if (-not (Test-Path $acceso)) { throw 'No se creo el acceso directo del menu Inicio' }
           Write-Host 'Acceso directo del menu Inicio: correcto'
+
+          $lanzador = Join-Path $programa 'Nebula.vbs'
+          if (-not (Test-Path $lanzador)) { throw 'Falta el lanzador sin consola' }
+          $atajo = (New-Object -ComObject WScript.Shell).CreateShortcut($acceso)
+          Write-Host ("Acceso directo: {0} {1}" -f $atajo.TargetPath, $atajo.Arguments)
+          if ($atajo.TargetPath -notmatch 'wscript') { throw 'El acceso directo deberia abrir el programa sin consola' }
+          if ($atajo.Arguments -notmatch 'Nebula\.vbs') { throw 'El acceso directo deberia usar el lanzador oculto' }
+          Add-Type -AssemblyName System.Drawing
+          $icono = [System.Drawing.Icon]::ExtractAssociatedIcon((Join-Path $programa 'Nebula.exe'))
+          if (-not $icono) { throw 'El ejecutable no tiene icono propio' }
+          Write-Host ("Icono del programa: {0}x{1}" -f $icono.Width, $icono.Height)
 
           if (-not (Test-Path $clave)) { throw 'No se registro en Aplicaciones instaladas' }
           $registro = Get-ItemProperty $clave
@@ -127,8 +138,8 @@ jobs:
           if ($registro.UninstallString -notmatch '--uninstall') { throw 'La orden de desinstalacion no es correcta' }
 
           Write-Host '== Abriendo el programa instalado =='
-          $app = Start-Process -FilePath (Join-Path $programa 'Ludoteca.exe') `
-            -ArgumentList @('--port', '4398', '--host', '127.0.0.1', '--data-dir', "$env:TEMP\ludoteca-instalada", '--demo', '--no-open') `
+          $app = Start-Process -FilePath (Join-Path $programa 'Nebula.exe') `
+            -ArgumentList @('--port', '4398', '--host', '127.0.0.1', '--data-dir', "$env:TEMP\nebula-instalada", '--demo', '--no-open') `
             -PassThru -RedirectStandardOutput "$env:TEMP\instalada.log" -RedirectStandardError "$env:TEMP\instalada.err"
           try {
             $ok = $false
@@ -148,8 +159,27 @@ jobs:
             Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
           }
 
+          Write-Host '== Comprobando el modo ventana =='
+          $log = "$env:TEMP\ventana.log"
+          $app2 = Start-Process -FilePath (Join-Path $programa 'Nebula.exe') `
+            -ArgumentList @('--port', '4396', '--host', '127.0.0.1', '--data-dir', "$env:TEMP\nebula-ventana", '--demo', '--open') `
+            -PassThru -RedirectStandardOutput $log -RedirectStandardError "$env:TEMP\ventana.err"
+          try {
+            foreach ($i in 1..20) {
+              Start-Sleep -Seconds 1
+              try { Invoke-RestMethod -Uri 'http://127.0.0.1:4396/api/health' -TimeoutSec 3 | Out-Null; break } catch { }
+            }
+            Start-Sleep -Seconds 5
+            $estado = Invoke-RestMethod -Uri 'http://127.0.0.1:4396/api/state' -TimeoutSec 10
+            Write-Host ("Modo de apertura: {0}" -f $estado.app.ventana)
+            Get-Content $log -ErrorAction SilentlyContinue | Where-Object { $_ -match 'Ventana|Aviso|navegador' } | Write-Host
+            if ($estado.app.ventana -ne 'aplicacion') { Write-Host '::warning::No se pudo abrir la ventana propia en este equipo' }
+          } finally {
+            Stop-Process -Id $app2.Id -Force -ErrorAction SilentlyContinue
+          }
+
           Write-Host '== Desinstalando =='
-          Start-Process -FilePath (Join-Path $programa 'Ludoteca.exe') -ArgumentList '--uninstall', '--silent' -Wait
+          Start-Process -FilePath (Join-Path $programa 'Nebula.exe') -ArgumentList '--uninstall', '--silent' -Wait
           Start-Sleep -Seconds 6
 
           if (Test-Path $acceso) { throw 'El acceso directo sigue ahi' }
@@ -161,23 +191,23 @@ jobs:
         shell: pwsh
         run: |
           $version = '${{ steps.version.outputs.numero }}'
-          New-Item -ItemType Directory -Force -Path dist/Ludoteca | Out-Null
-          Move-Item -Force dist/Ludoteca.exe dist/Ludoteca/Ludoteca.exe
-          Copy-Item LEEME.txt dist/Ludoteca/LEEME.txt
-          Copy-Item README.md dist/Ludoteca/LEEME-tecnico.md -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path dist/Nebula | Out-Null
+          Move-Item -Force dist/Nebula.exe dist/Nebula/Nebula.exe
+          Copy-Item LEEME.txt dist/Nebula/LEEME.txt
+          Copy-Item README.md dist/Nebula/LEEME-tecnico.md -ErrorAction SilentlyContinue
 
           New-Item -ItemType Directory -Force -Path dist/salida | Out-Null
-          Compress-Archive -Path dist/Ludoteca/* -DestinationPath "dist/salida/Ludoteca-$version-portable.zip" -Force
-          Move-Item -Force dist/Ludoteca-Instalador.exe "dist/salida/Ludoteca-$version-instalador.exe"
+          Compress-Archive -Path dist/Nebula/* -DestinationPath "dist/salida/Nebula-$version-portable.zip" -Force
+          Move-Item -Force dist/Nebula-Instalador.exe "dist/salida/Nebula-$version-instalador.exe"
           Get-ChildItem dist/salida | Format-Table Name, @{Name='MB';Expression={[math]::Round($_.Length/1MB,1)}}
 
       - name: Guardar los artefactos
         uses: actions/upload-artifact@v4
         with:
-          name: ludoteca-windows
+          name: nebula-windows
           path: |
-            dist/salida/Ludoteca-*-portable.zip
-            dist/salida/Ludoteca-*-instalador.exe
+            dist/salida/Nebula-*-portable.zip
+            dist/salida/Nebula-*-instalador.exe
           if-no-files-found: error
           retention-days: 90
 
@@ -186,41 +216,41 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.numero }}
-          name: Ludoteca ${{ steps.version.outputs.numero }}
+          name: Nébula ${{ steps.version.outputs.numero }}
           target_commitish: ${{ github.sha }}
           generate_release_notes: true
           body: |
             ## Como se instala
 
             **Con instalador (recomendado).** Descarga
-            `Ludoteca-${{ steps.version.outputs.numero }}-instalador.exe` y haz doble clic. Se instala
+            `Nebula-${{ steps.version.outputs.numero }}-instalador.exe` y haz doble clic. Se instala
             en tu carpeta de usuario, crea los accesos directos en el menu Inicio y en el escritorio,
             y aparece en **Aplicaciones instaladas** para quitarlo cuando quieras. No pide permisos de
             administrador.
 
-            **Sin instalarlo (portable).** Descarga `Ludoteca-${{ steps.version.outputs.numero }}-portable.zip`,
-            descomprimelo y abre `Ludoteca.exe` desde donde lo tengas.
+            **Sin instalarlo (portable).** Descarga `Nebula-${{ steps.version.outputs.numero }}-portable.zip`,
+            descomprimelo y abre `Nebula.exe` desde donde lo tengas.
 
             Los dos incluyen lo mismo: el programa completo, sin necesidad de instalar Node ni nada mas.
-            Tus datos se guardan en `%APPDATA%\Ludoteca`.
+            Tus datos se guardan en `%APPDATA%\Nebula`.
 
             Si Windows muestra el aviso azul de SmartScreen, pulsa **Mas informacion** y luego
             **Ejecutar de todas formas**: aparece porque no esta firmado con un certificado de pago.
 
             ## Cambios de esta version
           files: |
-            dist/salida/Ludoteca-*-portable.zip
-            dist/salida/Ludoteca-*-instalador.exe
+            dist/salida/Nebula-*-portable.zip
+            dist/salida/Nebula-*-instalador.exe
 
       - name: Resumen
         if: always()
         shell: pwsh
         run: |
           @"
-          ### Ludoteca ${{ steps.version.outputs.numero }} para Windows
-          - **Instalador:** ``Ludoteca-${{ steps.version.outputs.numero }}-instalador.exe``
-          - **Portable:** ``Ludoteca-${{ steps.version.outputs.numero }}-portable.zip``
-          - Descarga: seccion **Releases** del repositorio, o artefacto ``ludoteca-windows``
+          ### Nébula ${{ steps.version.outputs.numero }} para Windows
+          - **Instalador:** ``Nebula-${{ steps.version.outputs.numero }}-instalador.exe``
+          - **Portable:** ``Nebula-${{ steps.version.outputs.numero }}-portable.zip``
+          - Descarga: seccion **Releases** del repositorio, o artefacto ``nebula-windows``
           "@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
 
   linux:
@@ -234,17 +264,17 @@ jobs:
           node-version: '22'
 
       - name: Herramientas de empaquetado
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq binutils && npm install --no-save --no-audit --no-fund esbuild postject
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq binutils && npm install --no-save --no-audit --no-fund esbuild postject resedit
 
       - name: Construir los ejecutables
         run: |
-          node scripts/build-sea.mjs --modo portable  --runtime "$(command -v node)" --out dist/ludoteca
-          node scripts/build-sea.mjs --modo instalador --runtime "$(command -v node)" --out dist/ludoteca-instalador
+          node scripts/build-sea.mjs --modo portable  --runtime "$(command -v node)" --out dist/nebula
+          node scripts/build-sea.mjs --modo instalador --runtime "$(command -v node)" --out dist/nebula-instalador
 
       - name: Comprobar el ejecutable portable
         run: |
-          dist/ludoteca --version
-          dist/ludoteca --port 4399 --host 127.0.0.1 --data-dir /tmp/ludoteca-ci --demo --no-open &
+          dist/nebula --version
+          dist/nebula --port 4399 --host 127.0.0.1 --data-dir /tmp/nebula-ci --demo --no-open &
           for i in $(seq 1 30); do
             sleep 1
             if curl -sf http://127.0.0.1:4399/api/health >/dev/null; then break; fi
@@ -254,8 +284,8 @@ jobs:
 
       - name: Comprobar el instalador
         run: |
-          dist/ludoteca-instalador --version
-          if dist/ludoteca-instalador --silent; then
+          dist/nebula-instalador --version
+          if dist/nebula-instalador --silent; then
             echo "El instalador deberia avisar de que es para Windows" >&2
             exit 1
           fi
@@ -264,7 +294,7 @@ jobs:
       - name: Guardar el ejecutable
         uses: actions/upload-artifact@v4
         with:
-          name: ludoteca-linux
-          path: dist/ludoteca
+          name: nebula-linux
+          path: dist/nebula
           if-no-files-found: error
           retention-days: 90
