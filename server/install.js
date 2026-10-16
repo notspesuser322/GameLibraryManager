@@ -168,6 +168,33 @@ export function argumentosRegistro(rutas, datos = {}) {
   return pares.map(([nombre, tipo, valor]) => ['add', rutas.clave, '/v', nombre, '/t', tipo, '/d', valor, '/f']);
 }
 
+/**
+ * Contenido del archivo por lotes que borra la carpeta del programa.
+ *
+ * Va todo en ASCII: la carpeta se localiza con %LOCALAPPDATA% en vez de escribir
+ * la ruta del usuario (que puede llevar acentos y dependería de la página de
+ * códigos de la consola). Se espera con ping, que funciona sin consola, y se
+ * intenta dos veces: la primera puede pillarse con el ejecutable cerrándose.
+ */
+export function loteBorrado(rutas) {
+  const objetivo = process.env.LOCALAPPDATA
+    ? `%LOCALAPPDATA%\\Programs\\${NOMBRE}`
+    : rutas.dir;
+  const ascii = /^[\x20-\x7e]*$/.test(objetivo);
+  return [
+    '@echo off',
+    /* si la ruta lleva acentos hay que pasar la consola a UTF-8 antes de usarla */
+    ...(ascii ? [] : ['chcp 65001 >nul']),
+    `title Quitando ${NOMBRE}`,
+    'ping -n 3 127.0.0.1 >nul',
+    `rmdir /s /q "${objetivo}"`,
+    'ping -n 3 127.0.0.1 >nul',
+    `rmdir /s /q "${objetivo}"`,
+    'del /f /q "%~f0"',
+    '',
+  ].join('\r\n');
+}
+
 /** Argumentos de reg.exe para quitar el registro. */
 export function argumentosBorrarRegistro(rutas) {
   return ['delete', rutas.clave, '/f'];
@@ -432,14 +459,16 @@ export async function desinstalar({ silencioso = false, borrarDatos = false, rut
     } catch { /* archivos en uso */ }
   }
 
-  /* la carpeta del programa se borra después de cerrar: Windows no deja
-     eliminar un ejecutable en marcha, así que se deja encargado a cmd.exe */
+  /* La carpeta del programa se borra después de cerrar: Windows no deja
+     eliminar un ejecutable en marcha. Se deja encargado a un archivo por lotes
+     y no a una orden suelta, porque cmd.exe no entiende \" como comilla
+     escapada y con una ruta entre comillas la orden se quedaba a medias. */
   const carpeta = rutas.dir;
-  /* se espera con ping (funciona sin consola, timeout no) y se intenta dos veces */
-  const orden = `ping -n 3 127.0.0.1 >nul & rmdir /s /q "${carpeta}" & ping -n 3 127.0.0.1 >nul & rmdir /s /q "${carpeta}"`;
+  const lote = path.join(os.tmpdir(), `nebula-quitar-${process.pid}.cmd`);
   try {
-    spawn('cmd.exe', ['/d', '/s', '/c', orden], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
-    registrar('borrado de la carpeta encargado a cmd.exe (unos 5 segundos)');
+    fs.writeFileSync(lote, loteBorrado(rutas), 'utf8');
+    spawn('cmd.exe', ['/d', '/c', lote], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+    registrar(`borrado de la carpeta encargado a ${lote} (unos 5 segundos)`);
     if (!silencioso) escribir('  Programa eliminado (la carpeta se borra al cerrar)');
   } catch (err) {
     if (!silencioso) escribir(`  Aviso: no se pudo programar el borrado (${err.message})`);

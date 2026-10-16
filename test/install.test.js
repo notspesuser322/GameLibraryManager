@@ -14,7 +14,7 @@ import path from 'node:path';
 import {
   NOMBRE, NOMBRE_VISIBLE, rutasInstalacion, scriptAccesosDirectos, scriptBorrarAccesosDirectos,
   argumentosRegistro, argumentosBorrarRegistro, esModoInstalado, instalar, desinstalar, version,
-  lanzadorOculto,
+  lanzadorOculto, loteBorrado,
 } from '../server/install.js';
 
 const WIN_ENV = { LOCALAPPDATA: 'C:\\Users\\Ana\\AppData\\Local', APPDATA: 'C:\\Users\\Ana\\AppData\\Roaming' };
@@ -95,6 +95,26 @@ test('cada valor del registro se escribe en su propia orden de reg.exe', () => {
     homedir: 'C:\\Users\\Ana María',
   }), { version: '1.1.0' }).find((o) => o[3] === 'UninstallString');
   assert.equal(normalizar(conComillas[7]), '"C:/Users/Ana María/AppData/Local/Programs/Nebula/Nebula.exe" --uninstall');
+});
+
+test('la carpeta del programa se borra con un archivo por lotes', () => {
+  /* una orden suelta con comillas dentro no vale: cmd.exe no entiende \" como
+     comilla escapada y el borrado se quedaba a medias */
+  const guardado = process.env.LOCALAPPDATA;
+  process.env.LOCALAPPDATA = 'C:\\Users\\Ana María\\AppData\\Local';
+  try {
+    const lote = loteBorrado(rutasWin());
+    assert.ok(lote.startsWith('@echo off'), 'es un archivo por lotes');
+    assert.match(lote, /rmdir \/s \/q "%LOCALAPPDATA%\\Programs\\Nebula"/, 'usa la variable de entorno');
+    assert.equal((lote.match(/rmdir/g) || []).length, 2, 'se intenta dos veces, por si el ejecutable aún se está cerrando');
+    assert.equal((lote.match(/ping -n 3 127\.0\.0\.1 >nul/g) || []).length, 2, 'espera con ping, que funciona sin consola');
+    assert.match(lote, /del \/f \/q "%~f0"/, 'se borra a sí mismo');
+    assert.ok(/^[\x20-\x7e\r\n]*$/.test(lote), 'todo ASCII: así da igual la página de códigos');
+    assert.ok(!lote.includes('María'), 'no escribe la ruta del usuario');
+  } finally {
+    if (guardado === undefined) delete process.env.LOCALAPPDATA;
+    else process.env.LOCALAPPDATA = guardado;
+  }
 });
 
 test('la desinstalación borra la clave del registro', () => {
