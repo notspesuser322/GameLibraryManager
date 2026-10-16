@@ -256,7 +256,8 @@ export async function desinstalar({ silencioso = false, borrarDatos = false, rut
   /* la carpeta del programa se borra después de cerrar: Windows no deja
      eliminar un ejecutable en marcha, así que se deja encargado a cmd.exe */
   const carpeta = rutas.dir;
-  const orden = `timeout /t 2 /nobreak >nul & rmdir /s /q "${carpeta}"`;
+  /* se espera con ping (funciona sin consola, timeout no) y se intenta dos veces */
+  const orden = `ping -n 3 127.0.0.1 >nul & rmdir /s /q "${carpeta}" & ping -n 3 127.0.0.1 >nul & rmdir /s /q "${carpeta}"`;
   try {
     spawn('cmd.exe', ['/d', '/s', '/c', orden], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
     if (!silencioso) escribir('  Programa eliminado (la carpeta se borra al cerrar)');
