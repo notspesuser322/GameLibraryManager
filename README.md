@@ -49,6 +49,22 @@ necesario: no hace falta instalar Node ni nada más.
 - Los ejecutables se generan solos en cada `push` mediante GitHub Actions: abre la pestaña
   **Actions → Construir ejecutable → última ejecución → Artifacts** y descarga
   `ludoteca-windows.zip` (también hay una versión para Linux).
+
+  Para activar esa construcción hay que instalar una vez el flujo de trabajo (está listo en
+  `ci/build.yml`), porque GitHub exige un permiso especial para escribir dentro de
+  `.github/workflows/`:
+
+  ```bash
+  mkdir -p .github/workflows
+  cp ci/build.yml .github/workflows/build.yml
+  git add .github/workflows/build.yml
+  git commit -m "Construccion automatica del ejecutable"
+  git push
+  ```
+
+  A partir de ahí, cada push construye los ejecutables y pasa la batería de pruebas. Si el
+  programa que sube los cambios tiene el permiso `workflows`, se puede dejar directamente en
+  `.github/workflows/build.yml`.
 - Al abrirlo por primera vez se crea la carpeta de datos en tu usuario
   (`%APPDATA%\Ludoteca`) y se abre el navegador en `http://localhost:4337`.
 - Sirve el mismo comando para la terminal: `Ludoteca.exe --port 4400 --demo`.
@@ -271,7 +287,7 @@ scripts/
   build-sea.mjs     construye el ejecutable único (Node + esbuild + postject)
   build-dist.mjs    prepara la carpeta distribuible con el servidor empaquetado
   portable.mjs      ZIP escrito a mano: empaquetado alternativo sin herramientas externas
-.github/workflows/  construcción automática del ejecutable en cada push
+ci/build.yml   flujo de trabajo listo: copiar a .github/workflows/ para activarlo
 data/          tus datos (ignorado por git)
 dist/          resultado de las construcciones (ignorado por git)
 LEEME.txt      instrucciones para quien recibe el ejecutable

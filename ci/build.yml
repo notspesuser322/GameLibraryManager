@@ -1,3 +1,16 @@
+# Construcción automática del ejecutable.
+#
+# Para activarlo, copia este archivo a .github/workflows/ y súbelo:
+#
+#     mkdir -p .github/workflows
+#     cp ci/build.yml .github/workflows/build.yml
+#     git add .github/workflows/build.yml
+#     git commit -m "Construccion automatica del ejecutable"
+#     git push
+#
+# Se deja aquí porque crear archivos dentro de .github/workflows/ requiere un
+# permiso especial (workflows) que no todos los accesos tienen; el contenido es
+# el mismo y no necesita ningún cambio.
 name: Construir ejecutable
 
 # Se ejecuta en cada push: así el ejecutable siempre está al día sin hacer nada.
