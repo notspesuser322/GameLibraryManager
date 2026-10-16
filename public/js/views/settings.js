@@ -135,7 +135,19 @@ export function renderSettings(root) {
         <dt>Iniciada</dt><dd>${esc(app.startedAt ? relTime(app.startedAt) : '—')}</dd>
         <dt>Juegos</dt><dd>${state.facets.total}</dd>
         <dt>Datos</dt><dd class="mono">${esc(app.dataDir || '')}</dd>
+        <dt>Registro</dt><dd class="mono">${esc(app.log || 'Nebula.log')}</dd>
       </dl>
+      <p class="tiny muted mt">
+        La idea de este tipo de programa es de
+        <a href="https://playnite.link" target="_blank" rel="noopener">Playnite</a>, el gestor de
+        biblioteca de juegos libre para Windows: una sola lista con todos tus juegos, su ficha, su
+        carátula y sus horas. Nébula es una versión propia, en español y para juegos que ya tienes
+        en tus carpetas. El mérito de la idea original es de sus autores.
+      </p>
+      <p class="tiny muted">
+        Si algo no funciona, en <span class="mono">${esc(app.log || 'Nebula.log')}</span> queda anotado
+        paso a paso lo que hizo el programa: escaneos, fichas, carátulas y el motivo de cada error.
+      </p>
     </div>
   `;
 

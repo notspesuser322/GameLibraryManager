@@ -687,6 +687,7 @@ async function handleApi(req, res, pathname, query) {
         version: VERSION,
         platform: process.platform,
         dataDir: DATA_DIR,
+        log: rutaRegistro(),
         startedAt: bootTime,
         packaged: assets.packaged,
         ventana: hayEntornoGrafico() && Boolean(navegadorDisponible()) && !args.browser ? 'aplicacion' : 'navegador',
