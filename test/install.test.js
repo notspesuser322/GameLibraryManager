@@ -62,16 +62,39 @@ test('el borrado de accesos directos es tolerante: solo quita lo que existe', ()
 });
 
 test('el registro deja el programa en «Aplicaciones instaladas»', () => {
-  const args = argumentosRegistro(rutasWin(), { version: '1.1.0', tamanoKb: 87000 }).join(' ');
+  const ordenes = argumentosRegistro(rutasWin(), { version: '1.1.0', tamanoKb: 87000 });
+  const args = ordenes.flat().join(' ');
   assert.match(args, /^add "?HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Nebula/);
   assert.match(args, new RegExp(`/v DisplayName /t REG_SZ /d ${NOMBRE_VISIBLE}`), 'el nombre visible lleva tilde');
   assert.match(args, /\/v DisplayVersion \/t REG_SZ \/d 1\.1\.0/);
-  assert.match(args, /\/v UninstallString \/t REG_SZ \/d ".*Nebula\.exe" --uninstall/);
-  assert.match(args, /\/v QuietUninstallString \/t REG_SZ \/d ".*Nebula\.exe" --uninstall --silent/);
+  assert.match(args, /\/v UninstallString \/t REG_SZ \/d .*Nebula\.exe --uninstall/, 'la orden de desinstalación apunta al programa');
+  assert.match(args, /\/v QuietUninstallString \/t REG_SZ \/d .*Nebula\.exe --uninstall --silent/);
   assert.match(args, /\/v EstimatedSize \/t REG_DWORD \/d 87000/);
   assert.match(args, /\/v InstallLocation/);
-  assert.match(args, /\/f /, 'sobrescribe si ya existía');
-  assert.match(args, /87000$/, 'el tamaño estimado va al final');
+  assert.match(args, /\/f/, 'sobrescribe si ya existía');
+});
+
+test('cada valor del registro se escribe en su propia orden de reg.exe', () => {
+  /* con una sola orden para todo, un valor con comillas (la ruta al programa)
+     descuadraba el análisis de reg.exe y no se escribía nada; además, así la
+     primera orden crea la clave y un fallo suelto no se lleva por delante el resto */
+  const ordenes = argumentosRegistro(rutasWin(), { version: '1.1.0', tamanoKb: 87000 });
+  assert.ok(ordenes.length >= 9);
+  for (const orden of ordenes) {
+    assert.equal(orden[0], 'add');
+    assert.equal(orden[1], rutasWin().clave);
+    assert.equal(orden.filter((a) => a === '/v').length, 1, 'un solo valor por orden');
+    assert.equal(orden.filter((a) => a === '/d').length, 1);
+    assert.equal(orden[orden.length - 1], '/f');
+  }
+  assert.equal(ordenes[0][3], 'DisplayName', 'lo primero es lo que crea la clave');
+  /* sin espacios en la ruta no hacen falta comillas dentro del valor */
+  const conComillas = argumentosRegistro(rutasInstalacion({
+    platform: 'win32',
+    env: { LOCALAPPDATA: 'C:\\Users\\Ana María\\AppData\\Local', APPDATA: 'x' },
+    homedir: 'C:\\Users\\Ana María',
+  }), { version: '1.1.0' }).find((o) => o[3] === 'UninstallString');
+  assert.equal(normalizar(conComillas[7]), '"C:/Users/Ana María/AppData/Local/Programs/Nebula/Nebula.exe" --uninstall');
 });
 
 test('la desinstalación borra la clave del registro', () => {

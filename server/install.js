@@ -146,22 +146,26 @@ export function scriptBorrarAccesosDirectosVbs() {
 export function argumentosRegistro(rutas, datos = {}) {
   const v = datos.version || version();
   const tamanoKb = datos.tamanoKb || null;
+  /* Las comillas solo se añaden si la ruta lleva espacios: dentro de una orden de
+     reg.exe las comillas dobles descuadran el análisis de los argumentos, y con
+     una sola orden para todos los valores eso hacía que no se escribiera nada. */
+  const comillas = (ruta) => (/\s/.test(ruta) ? `"${ruta}"` : ruta);
   const pares = [
-    ['DisplayName', NOMBRE_VISIBLE],
-    ['DisplayVersion', v],
-    ['Publisher', 'Nebula'],
-    ['DisplayIcon', `${rutas.exe},0`],
-    ['InstallLocation', rutas.dir],
-    ['UninstallString', `"${rutas.exe}" --uninstall`],
-    ['QuietUninstallString', `"${rutas.exe}" --uninstall --silent`],
-    ['NoModify', '1'],
-    ['NoRepair', '1'],
-    ['EstimatedSize', tamanoKb ? String(Math.round(tamanoKb)) : null],
-  ].filter(([, valor]) => valor !== null && valor !== undefined);
+    ['DisplayName', 'REG_SZ', NOMBRE_VISIBLE],
+    ['DisplayVersion', 'REG_SZ', v],
+    ['Publisher', 'REG_SZ', NOMBRE],
+    ['DisplayIcon', 'REG_SZ', `${rutas.exe},0`],
+    ['InstallLocation', 'REG_SZ', rutas.dir],
+    ['UninstallString', 'REG_SZ', `${comillas(rutas.exe)} --uninstall`],
+    ['QuietUninstallString', 'REG_SZ', `${comillas(rutas.exe)} --uninstall --silent`],
+    ['NoModify', 'REG_DWORD', '1'],
+    ['NoRepair', 'REG_DWORD', '1'],
+    ['EstimatedSize', 'REG_DWORD', tamanoKb ? String(Math.round(tamanoKb)) : null],
+  ].filter(([, , valor]) => valor !== null && valor !== undefined);
 
-  const args = ['add', rutas.clave, '/f'];
-  for (const [nombre, valor] of pares) args.push('/v', nombre, '/t', nombre === 'EstimatedSize' ? 'REG_DWORD' : 'REG_SZ', '/d', valor);
-  return args;
+  /* una orden por valor: la primera crea la clave, y si alguna falla las demás
+     siguen escribiéndose en vez de perderse todas */
+  return pares.map(([nombre, tipo, valor]) => ['add', rutas.clave, '/v', nombre, '/t', tipo, '/d', valor, '/f']);
 }
 
 /** Argumentos de reg.exe para quitar el registro. */
@@ -176,15 +180,16 @@ export function esModoInstalado({ execPath = process.execPath, rutas = rutasInst
   return aqui === destino;
 }
 
-function ejecutar(comando, args, { silencioso = false } = {}) {
+function ejecutar(comando, args, { silencioso = false, capturar = false } = {}) {
   const resultado = spawnSync(comando, args, {
     windowsHide: true,
-    stdio: silencioso ? 'ignore' : 'inherit',
+    stdio: capturar ? ['ignore', 'pipe', 'pipe'] : (silencioso ? 'ignore' : 'inherit'),
     encoding: 'utf8',
   });
   if (resultado.error) throw resultado.error;
   if (typeof resultado.status === 'number' && resultado.status !== 0) {
-    throw new Error(`${comando} terminó con código ${resultado.status}`);
+    const detalle = capturar ? String(resultado.stderr || resultado.stdout || '').trim().slice(0, 300) : '';
+    throw new Error(`${comando} terminó con código ${resultado.status}${detalle ? ` (${detalle})` : ''}`);
   }
   return resultado;
 }
@@ -349,14 +354,27 @@ export async function instalar({ origen = process.execPath, silencioso = false, 
       if (!silencioso) escribir(`  Aviso: no se pudieron crear los accesos directos (${err.message})`);
     }
 
-    /* 4. registro en "Aplicaciones instaladas" */
+    /* 4. registro en "Aplicaciones instaladas": una orden por valor, y se
+       comprueba al final leyendo la clave, para que un fallo no pase inadvertido */
+    const ordenes = argumentosRegistro(rutas, { version: version(), tamanoKb: carpetaSizeKb(rutas.dir) });
+    let fallos = 0;
+    for (const orden of ordenes) {
+      const nombre = orden[3];
+      try {
+        ejecutar('reg.exe', orden, { capturar: true });
+        registrar(`registro: ${nombre} escrito`);
+      } catch (err) {
+        fallos++;
+        registrar(`ERROR del registro en ${nombre}: ${err.message}`);
+      }
+    }
     try {
-      const resultado = ejecutar('reg.exe', argumentosRegistro(rutas, { version: version(), tamanoKb: carpetaSizeKb(rutas.dir) }), { silencioso: true });
-      registrar(`registro escrito en "Aplicaciones instaladas" (reg.exe ${resultado.status})`);
+      ejecutar('reg.exe', ['query', rutas.clave], { capturar: true });
+      registrar(`comprobación: la clave del registro existe (${ordenes.length - fallos}/${ordenes.length} valores)`);
       if (!silencioso) escribir('  Aparecerá en Aplicaciones instaladas para poder quitarlo');
     } catch (err) {
-      registrar(`ERROR en el registro: ${err.message}`);
-      if (!silencioso) escribir(`  Aviso: no se pudo registrar la desinstalación (${err.message})`);
+      registrar(`ERROR: la clave del registro no se pudo leer: ${err.message}`);
+      if (!silencioso) escribir('  Aviso: no se pudo registrar en Aplicaciones instaladas');
     }
   } catch (err) {
     registrar(`ERROR: ${err.message}`);
@@ -400,7 +418,7 @@ export async function desinstalar({ silencioso = false, borrarDatos = false, rut
   } catch { /* ya no estaba */ }
 
   try {
-    ejecutar('reg.exe', argumentosBorrarRegistro(rutas), { silencioso: true });
+    ejecutar('reg.exe', argumentosBorrarRegistro(rutas), { capturar: true });
     registrar('registro de desinstalación eliminado');
     if (!silencioso) escribir('  Registro de desinstalación eliminado');
   } catch (err) {
