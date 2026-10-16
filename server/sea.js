@@ -10,6 +10,9 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
+import { prepararConsola } from './console.js';
+
+prepararConsola();
 
 const require = createRequire(import.meta.url);
 
@@ -38,7 +41,7 @@ if (sea && typeof sea.isSea === 'function' && sea.isSea()) {
       } catch (err) {
         /* si no se puede escribir se avisa y se sigue con lo que haya */
         try {
-          process.stderr.write(`  No se pudieron preparar los archivos de la aplicación: ${err.message}\n`);
+          console.error(`  No se pudieron preparar los archivos de la aplicación: ${err.message}`);
         } catch { /* sin salida disponible */ }
       }
     }

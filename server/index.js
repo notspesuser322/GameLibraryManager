@@ -23,6 +23,11 @@ import {
 import { buildDemoGames, touchToday } from './demo.js';
 import { MetadataService, buildPatch } from './metadata.js';
 import { resolveAssets, resolveDataDir } from './assets.js';
+import { prepararConsola } from './console.js';
+
+/* lo primero: dejar la consola en condiciones (en Windows evita que los acentos
+   y los adornos se vean como caracteres de otra codificación) */
+prepararConsola();
 import { nowIso, uid, ensureDir, exists, isInside, formatDuration } from './util.js';
 import * as util from './util.js';
 

@@ -77,7 +77,7 @@ npm start -- --open        # además abre el navegador
 npm start -- --port 5000   # otro puerto
 npm run demo               # arranca con una biblioteca de ejemplo (40 juegos ficticios)
 
-npm test                   # ejecuta la batería de pruebas (66 pruebas)
+npm test                   # ejecuta la batería de pruebas (74 pruebas)
 ```
 
 También están **`iniciar.bat`** (Windows) e **`iniciar.sh`** (macOS/Linux) como atajo:
@@ -104,6 +104,9 @@ Opciones de línea de comandos:
 | `--open` | Abre el navegador automáticamente |
 | `--no-open` | No abre el navegador |
 | `--version`, `-v` | Muestra la versión y termina |
+
+Variables de entorno: `LUDOTECA_PORT`, `LUDOTECA_HOST`, `LUDOTECA_DATA_DIR` y
+`LUDOTECA_CONSOLE` (ver más abajo).
 
 ### Guía rápida (2 minutos)
 
@@ -213,6 +216,27 @@ de crítica y **carátula**.
 - Si no hay internet, la búsqueda lo dice y la biblioteca sigue funcionando igual: las fichas
   que ya estaban guardadas no se tocan y el arte generado sigue cubriendo las carátulas.
 
+### Si la consola se ve rara en Windows
+
+La consola de Windows no siempre usa UTF-8, y entonces los acentos y los adornos
+(`─`, `ⓘ`, `…`) se ven como símbolos de otra codificación —letras chinas incluidas—. Ludoteca
+lo detecta al arrancar, intenta pasar la consola a UTF-8 y, si no lo consigue, escribe en
+texto simple:
+
+```
+  *  Biblioteca de demostracion: 40 juegos de ejemplo cargados
+  ----------------------------------
+```
+
+Puedes forzarlo cuando quieras:
+
+| Valor | Qué hace |
+| --- | --- |
+| `LUDOTECA_CONSOLE=ascii` | Escribe sin acentos ni adornos (lo más seguro en cualquier consola) |
+| `LUDOTECA_CONSOLE=utf8` | Escribe con acentos y adornos, sin tocar la configuración de la consola |
+
+En Windows: `set LUDOTECA_CONSOLE=ascii` antes de abrir el programa.
+
 ## Privacidad y datos
 
 - Todo se guarda en `data/`: `biblioteca.json` (biblioteca y ajustes), `media/` (carátulas) y
@@ -270,6 +294,7 @@ Toda la interfaz usa esta API local (JSON). Útil para automatizar o integrar co
 server/
   index.js     servidor HTTP, API y archivos estáticos
   assets.js    rutas de la app: funcionan igual desde el código y dentro del ejecutable
+  console.js   salida por consola legible en cualquier codificación (Windows incluido)
   sea.js       extrae la interfaz incrustada cuando corre como ejecutable único
   metadata.js  búsqueda de fichas: Wikipedia, Wikidata, Steam y RAWG
   store.js     almacén JSON con escritura atómica, respaldos, sesiones y estadísticas
@@ -282,7 +307,7 @@ public/
   index.html   estructura de la interfaz
   styles.css   tema oscuro con acento configurable
   js/          app, estado, componentes, vistas (biblioteca, ficha, actividad, estadísticas, buscar, ajustes)
-test/          66 pruebas: almacén, detección, lanzador, arte, metadatos y API completa
+test/          74 pruebas: almacén, detección, lanzador, arte, metadatos, consola y API completa
 scripts/
   build-sea.mjs     construye el ejecutable único (Node + esbuild + postject)
   build-dist.mjs    prepara la carpeta distribuible con el servidor empaquetado
@@ -307,7 +332,9 @@ las carátulas generadas, las plantillas del lanzador y una prueba de integraci�
 servidor real y recorre la API entera (incluido lanzar y detener un juego). Las 18 pruebas de
 metadatos usan respuestas simuladas de las fuentes, así que funcionan sin conexión a internet y
 comprueban el análisis de cada proveedor, el orden por parecido, el respaldo entre idiomas, la
-tolerancia a fuentes caídas y la regla de "no pisar lo que ya escribiste".
+tolerancia a fuentes caídas y la regla de "no pisar lo que ya escribiste". Otras ocho
+comprueban que la salida por consola queda legible incluso cuando la consola usa una
+codificación antigua.
 
 ## Limitaciones conocidas
 
