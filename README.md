@@ -49,6 +49,10 @@ npm run demo               # arranca con una biblioteca de ejemplo (40 juegos fi
 npm test                   # ejecuta la batería de pruebas (48 pruebas)
 ```
 
+Sin consola: en Windows haz doble clic en **`iniciar.bat`**; en macOS/Linux ejecuta
+**`./iniciar.sh`**. Ambos comprueban que Node esté instalado, arrancan la app y abren el
+navegador (el script acepta los mismos argumentos: `./iniciar.sh --demo --port 5000`).
+
 Opciones de línea de comandos:
 
 | Opción | Descripción |
@@ -203,6 +207,8 @@ public/
   js/          app, estado, componentes, vistas (biblioteca, ficha, actividad, estadísticas, buscar, ajustes)
 test/          48 pruebas: almacén, detección, lanzador, arte y API completa
 data/          tus datos (ignorado por git)
+iniciar.bat    arranque de un clic en Windows
+iniciar.sh     arranque de un clic en macOS/Linux
 ```
 
 ## Pruebas
