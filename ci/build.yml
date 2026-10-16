@@ -1,6 +1,6 @@
-# Construcción automática del ejecutable.
+# Construccion automatica del ejecutable.
 #
-# Para activarlo, copia este archivo a .github/workflows/ y súbelo:
+# Para activarlo, copia este archivo a .github/workflows/ y subelo:
 #
 #     mkdir -p .github/workflows
 #     cp ci/build.yml .github/workflows/build.yml
@@ -8,13 +8,13 @@
 #     git commit -m "Construccion automatica del ejecutable"
 #     git push
 #
-# Se deja aquí porque crear archivos dentro de .github/workflows/ requiere un
+# Se deja aqui porque crear archivos dentro de .github/workflows/ requiere un
 # permiso especial (workflows) que no todos los accesos tienen; el contenido es
-# el mismo y no necesita ningún cambio.
+# el mismo y no necesita ningun cambio.
 name: Construir ejecutable
 
-# Se ejecuta en cada push: así el ejecutable siempre está al día sin hacer nada.
-# También se puede lanzar a mano desde la pestaña Actions.
+# Se ejecuta en cada push: asi el ejecutable siempre esta al dia sin hacer nada.
+# Tambien se puede lanzar a mano desde la pestana Actions.
 on:
   push:
     branches: ['**']
@@ -35,7 +35,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Ejecutar la batería de pruebas
+      - name: Ejecutar la bateria de pruebas
         run: npm test
 
   windows:
@@ -65,7 +65,7 @@ jobs:
           Write-Host "Respuesta: $version"
           if ($version -notmatch 'ludoteca') { throw 'El ejecutable no responde a --version' }
           $size = (Get-Item "dist/Ludoteca.exe").Length / 1MB
-          Write-Host ("Tamaño: {0:N1} MB" -f $size)
+          Write-Host ("Tamano: {0:N1} MB" -f $size)
 
       - name: Prueba de arranque real
         shell: pwsh
@@ -84,11 +84,11 @@ jobs:
             }
             if (-not $ok) {
               Get-Content "$env:TEMP\ludoteca.log", "$env:TEMP\ludoteca.err" -ErrorAction SilentlyContinue | Write-Host
-              throw 'El servidor del ejecutable no respondió'
+              throw 'El servidor del ejecutable no respondio'
             }
             $state = Invoke-RestMethod -Uri 'http://127.0.0.1:4399/api/state' -TimeoutSec 10
-            Write-Host ("Correcto: {0} juegos · empaquetado={1} · datos en {2}" -f $state.games.Count, $health.packaged, $state.app.dataDir)
-            if ($state.games.Count -lt 10) { throw 'La biblioteca de ejemplo no cargó' }
+            Write-Host ("Correcto: {0} juegos - empaquetado={1} - datos en {2}" -f $state.games.Count, $health.packaged, $state.app.dataDir)
+            if ($state.games.Count -lt 10) { throw 'La biblioteca de ejemplo no cargo' }
           } finally {
             Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
           }
@@ -114,15 +114,15 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-      - name: Publicar en la sección Releases (solo etiquetas v*)
+      - name: Publicar en la seccion Releases (solo etiquetas v*)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: dist/salida/Ludoteca-windows.zip
           name: Ludoteca ${{ github.ref_name }}
           body: |
-            Ejecutable único para Windows: descarga el ZIP, descomprímelo y abre
-            `Ludoteca.exe`. No hace falta instalar nada más.
+            Ejecutable unico para Windows: descarga el ZIP, descomprimelo y abre
+            `Ludoteca.exe`. No hace falta instalar nada mas.
           generate_release_notes: true
 
       - name: Resumen

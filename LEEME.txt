@@ -1,24 +1,24 @@
-LUDOTECA — instrucciones rápidas
+LUDOTECA - instrucciones rapidas
 ===============================
 
 1. Descomprime esta carpeta donde quieras.
 2. Haz doble clic en Ludoteca.exe.
 3. Se abre el navegador con tu biblioteca en http://localhost:4337
 
-No hace falta instalar Node, ni Python, ni nada más. El ejecutable lleva dentro
+No hace falta instalar Node, ni Python, ni nada mas. El ejecutable lleva dentro
 todo lo necesario.
 
-DÓNDE SE GUARDAN TUS DATOS
+DONDE SE GUARDAN TUS DATOS
 --------------------------
 En tu carpeta de usuario, no junto al programa:
 
     %APPDATA%\Ludoteca
 
-Ahí están la biblioteca (biblioteca.json) y las carátulas que descargues.
+Ahi estan la biblioteca (biblioteca.json) y las caratulas que descargues.
 Puedes mover o copiar Ludoteca.exe de carpeta sin perder nada, y hacer copia de
 seguridad copiando esa carpeta.
 
-SI EL PUERTO 4337 ESTÁ OCUPADO
+SI EL PUERTO 4337 ESTA OCUPADO
 ------------------------------
 Abre una terminal en esta carpeta y ejecuta:
 
@@ -31,14 +31,14 @@ Opciones disponibles:
     --data-dir <dir>   otra carpeta de datos
     --demo             biblioteca de ejemplo con 40 juegos ficticios
     --no-open          no abrir el navegador
-    --version, -v      versión del programa
+    --version, -v      version del programa
 
-También puedes usar variables de entorno en lugar de opciones:
+Tambien puedes usar variables de entorno en lugar de opciones:
 
     set LUDOTECA_PORT=4400
     Ludoteca.exe
 
-CÓMO CERRARLO
+COMO CERRARLO
 -------------
 Cierra la ventana negra (la consola) o pulsa Ctrl+C en ella.
 
@@ -46,10 +46,10 @@ PARA DESINSTALARLO
 ------------------
 Borra Ludoteca.exe y la carpeta %APPDATA%\Ludoteca.
 
-METADATOS AUTOMÁTICOS
+METADATOS AUTOMATICOS
 ---------------------
-En la ficha de cada juego hay una pestaña "Metadatos": sirve para traer
-descripción, desarrollador, fecha, géneros y carátula de juegos que no están en
+En la ficha de cada juego hay una pestana "Metadatos": sirve para traer
+descripcion, desarrollador, fecha, generos y caratula de juegos que no estan en
 ninguna tienda (por ejemplo Minecraft lanzado con HMCL, juegos emulados o
-programas sueltos). Consulta Wikipedia, Wikidata y Steam. Necesita conexión a
+programas sueltos). Consulta Wikipedia, Wikidata y Steam. Necesita conexion a
 internet; si no la hay, avisa y la biblioteca sigue funcionando igual.
