@@ -70,9 +70,13 @@ jobs:
         run: |
           $node = (Get-Command node).Source
           Write-Host "Binario de Node: $node"
+          # build-sea.mjs compila tambien la ventana nativa (C#) si este equipo tiene
+          # .NET: el resultado es Nebula.exe (ventana) + Nebula-nucleo.exe (motor), y
+          # la ventana queda incrustada en el instalador para poder copiarla al instalar.
           node scripts/build-sea.mjs --modo portable  --runtime "$node" --out "dist/Nebula.exe"
           node scripts/build-sea.mjs --modo instalador --runtime "$node" --out "dist/Nebula-Instalador.exe"
           Get-ChildItem dist/*.exe | Format-Table Name, Length
+          Get-ChildItem dist/Nebula -ErrorAction SilentlyContinue | Format-Table Name, Length
 
       - name: Comprobar el portable
         shell: pwsh
@@ -244,6 +248,9 @@ jobs:
           $version = '${{ steps.version.outputs.numero }}'
           New-Item -ItemType Directory -Force -Path dist/Nebula | Out-Null
           Move-Item -Force dist/Nebula.exe dist/Nebula/Nebula.exe
+          # si la ventana nativa se compilo, el motor tambien viaja en el ZIP: van juntos
+          if (Test-Path dist/Nebula-nucleo.exe) { Copy-Item -Force dist/Nebula-nucleo.exe dist/Nebula/Nebula-nucleo.exe }
+          if (-not (Test-Path dist/Nebula/Nebula-nucleo.exe)) { Write-Host '::warning::El ZIP va sin motor propio (compilacion sin ventana nativa)' }
           Copy-Item LEEME.txt dist/Nebula/LEEME.txt
           Copy-Item README.md dist/Nebula/LEEME-tecnico.md -ErrorAction SilentlyContinue
 

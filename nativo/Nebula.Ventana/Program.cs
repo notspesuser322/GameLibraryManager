@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
 using System.Windows.Forms;
@@ -106,20 +107,37 @@ namespace Nebula.Ventana
             return 0;
         }
 
-        /// <summary>Versión del programa, tomada del propio ejecutable.</summary>
+        /// <summary>
+        /// Versión del programa, tomada del propio ejecutable.
+        ///
+        /// Se pregunta por tres caminos, del más exacto al más básico, porque de
+        /// esta respuesta depende que `--version` diga la verdad: la versión
+        /// informativa, la del ensamblado y, si las dos vinieran vacías, la que
+        /// Windows guarda en los datos del archivo.
+        /// </summary>
         public static string VersionTexto()
         {
             try
             {
-                string informativa = Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>() != null
-                    ? Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>().InformationalVersion
-                    : null;
-                if (!string.IsNullOrEmpty(informativa)) return informativa;
-                Version version = Assembly.GetExecutingAssembly().GetName().Version;
-                if (version != null) return version.ToString(3);
+                AssemblyInformationalVersionAttribute informativa =
+                    Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>();
+                if (informativa != null && EsVersionUtil(informativa.InformationalVersion)) return informativa.InformationalVersion;
+
+                Version ensamblado = Assembly.GetExecutingAssembly().GetName().Version;
+                if (ensamblado != null && ensamblado.Major > 0) return ensamblado.ToString(3);
+
+                FileVersionInfo datos = FileVersionInfo.GetVersionInfo(Application.ExecutablePath);
+                if (!string.IsNullOrEmpty(datos.ProductVersion) && EsVersionUtil(datos.ProductVersion)) return datos.ProductVersion;
+                if (!string.IsNullOrEmpty(datos.FileVersion) && EsVersionUtil(datos.FileVersion)) return datos.FileVersion;
             }
             catch { /* se responde con lo que haya */ }
             return Application.ProductVersion;
+        }
+
+        private static bool EsVersionUtil(string texto)
+        {
+            if (string.IsNullOrEmpty(texto)) return false;
+            return texto != "0.0.0" && !texto.StartsWith("0.0.0.");
         }
 
         private static string Ayuda()
