@@ -65,6 +65,14 @@ test('la ventana sabe arrancar el núcleo y vigilarlo', () => {
   assert.match(nucleo, /class Argumentos/, 'compone la línea de órdenes con el citado de Windows');
 });
 
+test('el motor no arranca dentro de la carpeta del programa', () => {
+  /* al desinstalar, la carpeta se borra desde fuera: si el motor (o el proceso
+     que borra) trabaja dentro de ella, Windows no deja eliminarla */
+  const nucleo = leer('Nucleo.cs');
+  assert.match(nucleo, /WorkingDirectory = Path\.GetTempPath\(\)/, 'el motor trabaja desde la carpeta temporal');
+  assert.ok(!/WorkingDirectory = Path\.GetDirectoryName/.test(nucleo), 'nadie arranca desde la carpeta del programa');
+});
+
 test('al cerrar la ventana se apaga el motor', () => {
   const ventana = leer('VentanaPrincipal.cs');
   assert.match(ventana, /OnFormClosed/, 'la ventana sabe cuándo se cierra');

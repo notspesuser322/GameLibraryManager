@@ -117,6 +117,14 @@ test('la carpeta del programa se borra con un archivo por lotes', () => {
   }
 });
 
+test('el borrado de la carpeta no se ejecuta desde dentro de ella', () => {
+  /* Windows no deja quitar el directorio de trabajo de un proceso: si cmd.exe
+     arranca con la carpeta del programa como directorio actual, rmdir falla y
+     la desinstalación deja la carpeta ahí. */
+  const fuente = fs.readFileSync(new URL('../server/install.js', import.meta.url), 'utf8');
+  assert.match(fuente, /cwd:\s*os\.tmpdir\(\)/, 'cmd.exe tiene que trabajar desde la carpeta temporal');
+});
+
 test('la desinstalación borra la clave del registro', () => {
   const args = argumentosBorrarRegistro(rutasWin());
   assert.deepEqual(args, ['delete', rutasWin().clave, '/f']);

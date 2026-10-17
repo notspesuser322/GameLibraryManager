@@ -81,7 +81,9 @@ namespace Nebula.Ventana
             inicio.UseShellExecute = false;
             inicio.CreateNoWindow = true;
             inicio.WindowStyle = ProcessWindowStyle.Hidden;
-            inicio.WorkingDirectory = Path.GetDirectoryName(rutaNucleo);
+            /* no se arranca dentro de la carpeta del programa: al desinstalar,
+               Windows no deja borrar la carpeta de trabajo de un proceso */
+            inicio.WorkingDirectory = Path.GetTempPath();
 
             proceso = Process.Start(inicio);
             if (proceso == null) throw new InvalidOperationException("no se pudo arrancar " + NombreNucleo);
@@ -141,7 +143,7 @@ namespace Nebula.Ventana
             inicio.Arguments = Argumentos.Unir(propios);
             inicio.UseShellExecute = false;
             inicio.CreateNoWindow = true;
-            inicio.WorkingDirectory = Path.GetDirectoryName(rutaNucleo);
+            inicio.WorkingDirectory = Path.GetTempPath();
             Process hijo = Process.Start(inicio);
             hijo.WaitForExit();
             return hijo.ExitCode;
@@ -154,7 +156,9 @@ namespace Nebula.Ventana
             inicio.Arguments = Argumentos.Unir(new List<string>(argumentos));
             inicio.UseShellExecute = false;
             inicio.CreateNoWindow = true;
-            inicio.WorkingDirectory = Path.GetDirectoryName(rutaNucleo);
+            /* fuera de la carpeta del programa: así la desinstalación puede
+               borrarla entera cuando este proceso termine */
+            inicio.WorkingDirectory = Path.GetTempPath();
             Process hijo = Process.Start(inicio);
             hijo.WaitForExit();
             return hijo.ExitCode;

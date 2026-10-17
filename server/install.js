@@ -526,7 +526,15 @@ export async function desinstalar({ silencioso = false, borrarDatos = false, rut
   const lote = path.join(os.tmpdir(), `nebula-quitar-${process.pid}.cmd`);
   try {
     fs.writeFileSync(lote, loteBorrado(rutas), 'utf8');
-    spawn('cmd.exe', ['/d', '/c', lote], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+    /* el proceso de borrado NO puede tener como carpeta de trabajo la que va a
+       borrar: Windows no deja quitar el directorio actual de un proceso, y el
+       programa (y su motor) se ejecutan justamente desde ahí. */
+    spawn('cmd.exe', ['/d', '/c', lote], {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true,
+      cwd: os.tmpdir(),
+    }).unref();
     registrar(`borrado de la carpeta encargado a ${lote} (unos 5 segundos)`);
     if (!silencioso) escribir('  Programa eliminado (la carpeta se borra al cerrar)');
   } catch (err) {
