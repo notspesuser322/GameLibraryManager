@@ -81,9 +81,14 @@ jobs:
       - name: Comprobar el portable
         shell: pwsh
         run: |
-          $version = & "dist/Nebula.exe" --version
+          # un programa de ventana no se queda esperando en la tubería de PowerShell:
+          # se lanza aparte, se espera y se lee lo que escribió
+          $archivoVersion = Join-Path $env:TEMP 'nebula-version.txt'
+          Start-Process -FilePath "dist/Nebula.exe" -ArgumentList '--version' -Wait `
+            -RedirectStandardOutput $archivoVersion | Out-Null
+          $version = (Get-Content $archivoVersion -Raw).Trim()
           Write-Host "Respuesta: $version"
-          if ($version -notmatch 'nebula') { throw 'El ejecutable no responde a --version' }
+          if ($version -notmatch '^nebula \d') { throw 'El ejecutable no responde a --version' }
 
           $process = Start-Process -FilePath "dist/Nebula.exe" `
             -ArgumentList @('--port', '4399', '--host', '127.0.0.1', '--data-dir', "$env:TEMP\nebula-ci", '--demo', '--no-open') `

@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace Nebula.Ventana
@@ -19,7 +20,27 @@ namespace Nebula.Ventana
     internal static class Salida
     {
         private static readonly object Candado = new object();
+        private const uint ATTACH_PARENT_PROCESS = 0xFFFFFFFF;
+        private static bool enganchada;
         private static string ruta;
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool AttachConsole(uint procesoId);
+
+        /// <summary>
+        /// Se engancha a la terminal desde la que se abrió el programa, si la hay.
+        ///
+        /// Un programa de ventana no trae consola propia (y no debe traerla), pero
+        /// cuando lo llama una terminal (`Nebula.exe --version`, `--help`) sí hay
+        /// una consola detrás donde responder. Si se abrió con doble clic no hay
+        /// ninguna: la llamada falla y aquí no pasa nada.
+        /// </summary>
+        public static void Enganchar()
+        {
+            if (enganchada) return;
+            enganchada = true;
+            try { AttachConsole(ATTACH_PARENT_PROCESS); } catch { /* sin consola */ }
+        }
 
         /// <summary>Prepara el archivo de registro dentro de la carpeta de datos.</summary>
         public static void Preparar(string carpetaDatos)

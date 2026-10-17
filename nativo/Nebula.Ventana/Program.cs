@@ -27,6 +27,9 @@ namespace Nebula.Ventana
         [STAThread]
         private static int Main(string[] argumentos)
         {
+            /* si lo llaman desde una terminal, contestar ahí (--version, --help) */
+            Salida.Enganchar();
+
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 

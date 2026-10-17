@@ -73,6 +73,16 @@ test('el motor no arranca dentro de la carpeta del programa', () => {
   assert.ok(!/WorkingDirectory = Path\.GetDirectoryName/.test(nucleo), 'nadie arranca desde la carpeta del programa');
 });
 
+test('la ventana contesta en la terminal cuando la hay', () => {
+  const programa = leer('Program.cs');
+  assert.match(programa, /Salida\.Enganchar\(\)/, 'se engancha a la consola de quien lo llama');
+  assert.match(programa, /Salida\.Inmediata\(/, 'la versión y la ayuda responden sin ensuciar el registro');
+  const salida = leer('Salida.cs');
+  assert.match(salida, /AttachConsole/, 'un programa de ventana no trae consola: se engancha a la del padre');
+  const flujo = fs.readFileSync(new URL('../ci/build.yml', import.meta.url), 'utf8');
+  assert.match(flujo, /RedirectStandardOutput \$archivoVersion/, 'la integración continua lee la respuesta de verdad');
+});
+
 test('al cerrar la ventana se apaga el motor', () => {
   const ventana = leer('VentanaPrincipal.cs');
   assert.match(ventana, /OnFormClosed/, 'la ventana sabe cuándo se cierra');
