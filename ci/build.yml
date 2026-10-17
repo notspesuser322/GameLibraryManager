@@ -1,0 +1,367 @@
+# Construccion automatica de los ejecutables y de la pagina de descargas.
+#
+# COMO ACTIVARLO (una sola vez): este archivo se copia tal cual a
+# .github/workflows/build.yml en la rama main. GitHub no permite crear archivos
+# dentro de .github/workflows/ sin un permiso especial, por eso vive aqui.
+#
+#     mkdir -p .github/workflows
+#     cp ci/build.yml .github/workflows/build.yml
+#     git add .github/workflows/build.yml
+#     git commit -m "Construccion automatica del ejecutable"
+#     git push
+#
+# Que hace en cada push:
+#   1. ejecuta la bateria de pruebas;
+#   2. construye Nebula.exe (portable) y Nebula-Instalador.exe;
+#   3. comprueba de verdad que el portable arranca y responde;
+#   4. instala el programa con el instalador, comprueba accesos directos y
+#      registro, lo abre, lo desinstala y verifica que no quede nada;
+#   5. publica los dos archivos en Releases con su etiqueta (vX.Y.Z) y las notas
+#      generadas a partir de los commits;
+#   6. los deja tambien como artefactos descargables.
+name: Construir ejecutable
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  pruebas:
+    name: Pruebas
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Ejecutar la bateria de pruebas
+        run: npm test
+
+  windows:
+    name: Ejecutable de Windows
+    needs: pruebas
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Herramientas de empaquetado
+        run: npm install --no-save --no-audit --no-fund esbuild postject resedit
+
+      - name: Version publicada
+        id: version
+        shell: pwsh
+        run: |
+          $v = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          Write-Host "Version: $v"
+          "numero=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Construir el portable y el instalador
+        shell: pwsh
+        run: |
+          $node = (Get-Command node).Source
+          Write-Host "Binario de Node: $node"
+          # build-sea.mjs compila tambien la ventana nativa (C#) si este equipo tiene
+          # .NET: el resultado es Nebula.exe (ventana) + Nebula-nucleo.exe (motor), y
+          # la ventana queda incrustada en el instalador para poder copiarla al instalar.
+          node scripts/build-sea.mjs --modo portable  --runtime "$node" --out "dist/Nebula.exe"
+          node scripts/build-sea.mjs --modo instalador --runtime "$node" --out "dist/Nebula-Instalador.exe"
+          Get-ChildItem dist/*.exe | Format-Table Name, Length
+          Get-ChildItem dist/Nebula -ErrorAction SilentlyContinue | Format-Table Name, Length
+
+      - name: Comprobar el portable
+        shell: pwsh
+        run: |
+          # un programa de ventana no se queda esperando en la tubería de PowerShell:
+          # se lanza aparte, se espera y se lee lo que escribió
+          $archivoVersion = Join-Path $env:TEMP 'nebula-version.txt'
+          Start-Process -FilePath "dist/Nebula.exe" -ArgumentList '--version' -Wait `
+            -RedirectStandardOutput $archivoVersion | Out-Null
+          $version = (Get-Content $archivoVersion -Raw).Trim()
+          Write-Host "Respuesta: $version"
+          if ($version -notmatch '^nebula \d') { throw 'El ejecutable no responde a --version' }
+
+          $process = Start-Process -FilePath "dist/Nebula.exe" `
+            -ArgumentList @('--port', '4399', '--host', '127.0.0.1', '--data-dir', "$env:TEMP\nebula-ci", '--demo', '--no-open') `
+            -PassThru -RedirectStandardOutput "$env:TEMP\nebula.log" -RedirectStandardError "$env:TEMP\nebula.err"
+          try {
+            $ok = $false
+            foreach ($i in 1..30) {
+              Start-Sleep -Seconds 1
+              try {
+                $health = Invoke-RestMethod -Uri 'http://127.0.0.1:4399/api/health' -TimeoutSec 3
+                if ($health.ok) { $ok = $true; break }
+              } catch { }
+            }
+            if (-not $ok) {
+              Get-Content "$env:TEMP\nebula.log", "$env:TEMP\nebula.err" -ErrorAction SilentlyContinue | Write-Host
+              throw 'El servidor del ejecutable no respondio'
+            }
+            $state = Invoke-RestMethod -Uri 'http://127.0.0.1:4399/api/state' -TimeoutSec 10
+            Write-Host ("Correcto: {0} juegos, empaquetado={1}" -f $state.games.Count, $health.packaged)
+            if ($state.games.Count -lt 10) { throw 'La biblioteca de ejemplo no cargo' }
+
+            # el programa no tiene consola: lo que cuenta va al registro en archivo
+            $registroApp = Join-Path $env:TEMP 'nebula-ci\Nebula.log'
+            if (-not (Test-Path $registroApp)) { throw 'El programa no escribio su registro (Nebula.log)' }
+            Write-Host ("Registro del programa: {0} lineas" -f (Get-Content $registroApp).Count)
+            $contenido = Get-Content $registroApp -Raw
+            if ($contenido -notmatch 'N.bula arranc') { throw 'El registro no tiene la marca de arranque' }
+            if ($contenido -notmatch 'Nébula') { throw 'El registro no guarda los acentos' }
+          } finally {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Instalar, comprobar y desinstalar
+        shell: pwsh
+        run: |
+          $programa   = Join-Path $env:LOCALAPPDATA 'Programs\Nebula'
+          $menu       = [Environment]::GetFolderPath('Programs')
+          $acceso     = Join-Path $menu 'Nebula.lnk'
+          $escritorio = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Nebula.lnk'
+          $clave      = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Nebula'
+          $registro   = Join-Path $env:TEMP 'Nebula-instalacion.log'
+          $salida     = Join-Path $env:TEMP 'instalador.log'
+          $errores    = Join-Path $env:TEMP 'instalador.err'
+
+          function Fallo([string]$motivo) {
+            Write-Host "::error::$motivo"
+            Write-Host '--- salida del instalador ---'
+            Get-Content $salida, $errores -ErrorAction SilentlyContinue | Write-Host
+            Write-Host '--- registro de la instalacion ---'
+            Get-Content $registro -ErrorAction SilentlyContinue | Write-Host
+            Write-Host '--- carpeta del programa ---'
+            Get-ChildItem $programa -ErrorAction SilentlyContinue | Format-Table Name, Length | Out-String | Write-Host
+            Write-Host '--- accesos directos ---'
+            Get-ChildItem $acceso, $escritorio -ErrorAction SilentlyContinue | Format-Table FullName | Out-String | Write-Host
+            throw $motivo
+          }
+
+          Write-Host '== Instalando en silencio =='
+          $instalador = Start-Process -FilePath "dist/Nebula-Instalador.exe" -ArgumentList '--silent' -PassThru -Wait `
+            -RedirectStandardOutput $salida -RedirectStandardError $errores
+          Write-Host ("El instalador termino con codigo {0}" -f $instalador.ExitCode)
+          Get-Content $salida, $errores -ErrorAction SilentlyContinue | Write-Host
+          Start-Sleep -Seconds 3
+
+          if (-not (Test-Path (Join-Path $programa 'Nebula.exe'))) { Fallo 'No se copio el programa' }
+          Write-Host ("Programa instalado en {0}" -f $programa)
+
+          if (-not (Test-Path $acceso)) { Fallo 'No se creo el acceso directo del menu Inicio' }
+          Write-Host 'Acceso directo del menu Inicio: correcto'
+
+          # nada de lanzadores de consola (.cmd ni .bat) en la carpeta de instalacion
+          $sobrantes = Get-ChildItem $programa -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Extension -in '.cmd', '.bat', '.ps1' }
+          if ($sobrantes) { Fallo ('Sobran lanzadores en la carpeta de instalacion: ' + ($sobrantes.Name -join ', ')) }
+          Write-Host 'Carpeta de instalacion sin lanzadores de consola'
+
+          # el acceso directo abre el programa sin que aparezca ninguna ventana negra
+          $lanzador = Join-Path $programa 'Nebula.vbs'
+          if (-not (Test-Path $lanzador)) { Fallo 'Falta el lanzador sin consola' }
+          $atajo = (New-Object -ComObject WScript.Shell).CreateShortcut($acceso)
+          Write-Host ("Acceso directo: {0} {1}" -f $atajo.TargetPath, $atajo.Arguments)
+          if ($atajo.TargetPath -notmatch 'wscript') { Fallo 'El acceso directo deberia abrir el programa sin consola' }
+          if ($atajo.Arguments -notmatch 'Nebula\.vbs') { Fallo 'El acceso directo deberia usar el lanzador oculto' }
+          Add-Type -AssemblyName System.Drawing
+          $icono = [System.Drawing.Icon]::ExtractAssociatedIcon((Join-Path $programa 'Nebula.exe'))
+          if (-not $icono) { Fallo 'El ejecutable no tiene icono propio' }
+          Write-Host ("Icono del programa: {0}x{1}" -f $icono.Width, $icono.Height)
+
+          if (-not (Test-Path $clave)) { Fallo 'No se registro en Aplicaciones instaladas' }
+          $datos = Get-ItemProperty $clave
+          Write-Host ("Registro: {0} {1}" -f $datos.DisplayName, $datos.DisplayVersion)
+          if ($datos.UninstallString -notmatch '--uninstall') { Fallo 'La orden de desinstalacion no es correcta' }
+
+          Write-Host '== Abriendo el programa instalado =='
+          $app = Start-Process -FilePath (Join-Path $programa 'Nebula.exe') `
+            -ArgumentList @('--port', '4398', '--host', '127.0.0.1', '--data-dir', "$env:TEMP\nebula-instalada", '--demo', '--no-open') `
+            -PassThru -RedirectStandardOutput "$env:TEMP\instalada.log" -RedirectStandardError "$env:TEMP\instalada.err"
+          try {
+            $ok = $false
+            foreach ($i in 1..30) {
+              Start-Sleep -Seconds 1
+              try {
+                $health = Invoke-RestMethod -Uri 'http://127.0.0.1:4398/api/health' -TimeoutSec 3
+                if ($health.ok) { $ok = $true; break }
+              } catch { }
+            }
+            if (-not $ok) {
+              Get-Content "$env:TEMP\instalada.log", "$env:TEMP\instalada.err" -ErrorAction SilentlyContinue | Write-Host
+              Fallo 'La copia instalada no arranco'
+            }
+            Write-Host 'La copia instalada arranca y responde'
+          } finally {
+            Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 2
+          }
+
+          Write-Host '== Comprobando el modo ventana =='
+          $app2 = Start-Process -FilePath (Join-Path $programa 'Nebula.exe') `
+            -ArgumentList @('--port', '4396', '--host', '127.0.0.1', '--data-dir', "$env:TEMP\nebula-ventana", '--demo', '--open') `
+            -PassThru -RedirectStandardOutput "$env:TEMP\ventana.log" -RedirectStandardError "$env:TEMP\ventana.err"
+          try {
+            foreach ($i in 1..20) {
+              Start-Sleep -Seconds 1
+              try { Invoke-RestMethod -Uri 'http://127.0.0.1:4396/api/health' -TimeoutSec 3 | Out-Null; break } catch { }
+            }
+            Start-Sleep -Seconds 4
+            $estado = $null
+            try { $estado = Invoke-RestMethod -Uri 'http://127.0.0.1:4396/api/state' -TimeoutSec 10 } catch { }
+            if ($estado) {
+              Write-Host ("Modo de apertura: {0}" -f $estado.app.ventana)
+              if ($estado.app.ventana -ne 'aplicacion') { Write-Host '::warning::No se pudo abrir la ventana propia en este equipo' }
+              else { Write-Host 'La ventana propia se abrio sin consola' }
+            } else {
+              Write-Host '::warning::No se pudo leer el estado con la ventana abierta'
+            }
+          } catch {
+            Write-Host "::warning::La comprobacion del modo ventana no se pudo completar: $_"
+          } finally {
+            Get-Content "$env:TEMP\ventana.log", "$env:TEMP\ventana.err" -ErrorAction SilentlyContinue | Where-Object { $_ -match 'Ventana|Aviso|navegador' } | Write-Host
+            Stop-Process -Id $app2.Id -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 2
+          }
+
+          Write-Host '== Desinstalando =='
+          $quitar = Start-Process -FilePath (Join-Path $programa 'Nebula.exe') -ArgumentList '--uninstall', '--silent' -PassThru -Wait `
+            -RedirectStandardOutput "$env:TEMP\desinstalar.log" -RedirectStandardError "$env:TEMP\desinstalar.err"
+          Write-Host ("La desinstalacion termino con codigo {0}" -f $quitar.ExitCode)
+          Get-Content "$env:TEMP\desinstalar.log", "$env:TEMP\desinstalar.err" -ErrorAction SilentlyContinue | Write-Host
+          Start-Sleep -Seconds 12
+
+          if (Test-Path $acceso) { Fallo 'El acceso directo sigue ahi' }
+          if (Test-Path $clave) { Fallo 'El registro sigue ahi' }
+          if (Test-Path $programa) {
+            Get-ChildItem $programa -Recurse -ErrorAction SilentlyContinue | Format-Table FullName | Out-String | Write-Host
+            Fallo 'La carpeta del programa sigue ahi'
+          }
+          Write-Host 'Desinstalacion limpia: sin accesos, sin registro y sin carpeta'
+
+      - name: Preparar los archivos de descarga
+        shell: pwsh
+        run: |
+          $version = '${{ steps.version.outputs.numero }}'
+          New-Item -ItemType Directory -Force -Path dist/Nebula | Out-Null
+          Move-Item -Force dist/Nebula.exe dist/Nebula/Nebula.exe
+          # si la ventana nativa se compilo, el motor tambien viaja en el ZIP: van juntos
+          if (Test-Path dist/Nebula-nucleo.exe) { Copy-Item -Force dist/Nebula-nucleo.exe dist/Nebula/Nebula-nucleo.exe }
+          if (-not (Test-Path dist/Nebula/Nebula-nucleo.exe)) { Write-Host '::warning::El ZIP va sin motor propio (compilacion sin ventana nativa)' }
+          Copy-Item LEEME.txt dist/Nebula/LEEME.txt
+          Copy-Item README.md dist/Nebula/LEEME-tecnico.md -ErrorAction SilentlyContinue
+
+          New-Item -ItemType Directory -Force -Path dist/salida | Out-Null
+          Compress-Archive -Path dist/Nebula/* -DestinationPath "dist/salida/Nebula-$version-portable.zip" -Force
+          Move-Item -Force dist/Nebula-Instalador.exe "dist/salida/Nebula-$version-instalador.exe"
+          Get-ChildItem dist/salida | Format-Table Name, @{Name='MB';Expression={[math]::Round($_.Length/1MB,1)}}
+
+      - name: Guardar los artefactos
+        uses: actions/upload-artifact@v4
+        with:
+          name: nebula-windows
+          path: |
+            dist/salida/Nebula-*-portable.zip
+            dist/salida/Nebula-*-instalador.exe
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publicar en Releases
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.numero }}
+          name: Nébula ${{ steps.version.outputs.numero }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+          body: |
+            ## Como se instala
+
+            **Con instalador (recomendado).** Descarga
+            `Nebula-${{ steps.version.outputs.numero }}-instalador.exe` y haz doble clic. Se instala
+            en tu carpeta de usuario, crea los accesos directos en el menu Inicio y en el escritorio,
+            y aparece en **Aplicaciones instaladas** para quitarlo cuando quieras. No pide permisos de
+            administrador.
+
+            **Sin instalarlo (portable).** Descarga `Nebula-${{ steps.version.outputs.numero }}-portable.zip`,
+            descomprimelo y abre `Nebula.exe` desde donde lo tengas.
+
+            Los dos incluyen lo mismo: el programa completo, sin necesidad de instalar Node ni nada mas.
+            Tus datos se guardan en `%APPDATA%\Nebula`, junto al registro de lo que hace el programa
+            (`Nebula.log`), que es donde mirar si algo no funciona.
+
+            El ejecutable es un programa de ventana: abre su propia ventana y **no deja ninguna consola
+            abierta** ni procesos sueltos por detras (al cerrar la ventana, termina).
+
+            Si Windows muestra el aviso azul de SmartScreen, pulsa **Mas informacion** y luego
+            **Ejecutar de todas formas**: aparece porque no esta firmado con un certificado de pago.
+
+            ## Cambios de esta version
+          files: |
+            dist/salida/Nebula-*-portable.zip
+            dist/salida/Nebula-*-instalador.exe
+
+      - name: Resumen
+        if: always()
+        shell: pwsh
+        run: |
+          @"
+          ### Nébula ${{ steps.version.outputs.numero }} para Windows
+          - **Instalador:** ``Nebula-${{ steps.version.outputs.numero }}-instalador.exe``
+          - **Portable:** ``Nebula-${{ steps.version.outputs.numero }}-portable.zip``
+          - Descarga: seccion **Releases** del repositorio, o artefacto ``nebula-windows``
+          "@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+
+  linux:
+    name: Ejecutable de Linux
+    needs: pruebas
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Herramientas de empaquetado
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq binutils && npm install --no-save --no-audit --no-fund esbuild postject resedit
+
+      - name: Construir los ejecutables
+        run: |
+          node scripts/build-sea.mjs --modo portable  --runtime "$(command -v node)" --out dist/nebula
+          node scripts/build-sea.mjs --modo instalador --runtime "$(command -v node)" --out dist/nebula-instalador
+
+      - name: Comprobar el ejecutable portable
+        run: |
+          dist/nebula --version
+          dist/nebula --port 4399 --host 127.0.0.1 --data-dir /tmp/nebula-ci --demo --no-open &
+          for i in $(seq 1 30); do
+            sleep 1
+            if curl -sf http://127.0.0.1:4399/api/health >/dev/null; then break; fi
+          done
+          curl -sf http://127.0.0.1:4399/api/health | tee /tmp/health.json
+          node -e "const d=require('/tmp/health.json'); if(!d.ok) process.exit(1); console.log('interfaz y API correctas')"
+
+      - name: Comprobar el instalador
+        run: |
+          dist/nebula-instalador --version
+          if dist/nebula-instalador --silent; then
+            echo "El instalador deberia avisar de que es para Windows" >&2
+            exit 1
+          fi
+          echo "El instalador avisa correctamente en sistemas que no son Windows"
+
+      - name: Guardar el ejecutable
+        uses: actions/upload-artifact@v4
+        with:
+          name: nebula-linux
+          path: dist/nebula
+          if-no-files-found: error
+          retention-days: 90

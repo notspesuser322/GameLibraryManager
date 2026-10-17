@@ -1,0 +1,134 @@
+NEBULA 1.4.0 - instrucciones rapidas
+====================================
+
+DOS FORMAS DE USARLO
+--------------------
+
+A) INSTALADOR (recomendado)
+   Doble clic en Nebula-Instalador.exe.
+   - Se instala en tu carpeta de usuario (no pide permisos de administrador).
+   - Crea accesos directos en el menu Inicio y en el escritorio, con el icono
+     del programa.
+   - Aparece en "Aplicaciones instaladas" para quitarlo cuando quieras.
+   - Al terminar te pregunta si quieres abrirlo.
+
+B) PORTABLE (sin instalar)
+   Descomprime el ZIP ENTERO y abre Nebula.exe desde donde lo tengas.
+   Son dos archivos y van juntos: Nebula.exe (la ventana del programa) y
+   Nebula-nucleo.exe (el motor). Si mueves el programa, mueve los dos.
+
+SE ABRE COMO UN PROGRAMA DE WINDOWS, DE VERDAD
+---------------------------------------------
+Nebula.exe es una aplicacion de Windows escrita en C#: una ventana normal, con
+su icono en la barra de tareas, su boton de cerrar y ninguna barra de
+direcciones. No es una pagina web abierta en un navegador.
+
+  - No aparece NINGUNA ventana de consola: ni al abrirlo, ni un parpadeo.
+  - No queda NADA corriendo por detras: cuando cierras la ventana, el programa
+    termina. (Si tienes un juego en marcha, se sigue midiendo el tiempo hasta
+    que lo cierres, y entonces termina solo.)
+  - Dentro, el motor (Nebula-nucleo.exe) hace el trabajo de siempre, asi que
+    todo lo que tenias sigue igual.
+
+Toda la interfaz son controles de Windows: cada tarjeta, cada boton y cada lista
+los dibuja el propio programa. No hay ninguna pagina web dentro, ni WebView2, ni
+depende de Edge ni de Chrome: no hay que instalar nada.
+
+Si prefieres verlo en el navegador normal (o abrirlo desde el movil en tu red):
+
+    Nebula.exe --browser
+
+La direccion sigue siendo http://localhost:4337.
+
+DONDE SE GUARDAN TUS DATOS
+--------------------------
+En tu carpeta de usuario, no junto al programa:
+
+    %APPDATA%\Nebula
+
+Ahi estan la biblioteca (biblioteca.json), las caratulas descargadas y los
+registros de lo que hace el programa (Nebula.log y Nebula-ventana.log). Puedes
+mover el programa o reinstalarlo sin perder nada, y hacer copia de seguridad
+copiando esa carpeta.
+
+Si algo va mal, abre esos dos archivos con el Bloc de notas: ahi se ve paso a
+paso que paso (arranque de la ventana, escaneos, fichas, caratulas y el motivo
+concreto de cada error).
+
+TUS CARPETAS SE QUEDAN GUARDADAS
+--------------------------------
+Cuando agregas una carpeta (en "Buscar juegos" o en Ajustes), queda registrada.
+Desde ese momento Nebula la revisa SOLA cada vez que arranca y suma los juegos
+que aparezcan despues: no hay que volver a agregarla ni acordarse de escanear.
+
+Las carpetas se ven y se quitan en Ajustes -> Carpetas vigiladas. Se puede
+apagar el analisis automatico en Ajustes si prefieres hacerlo a mano.
+
+FICHAS Y CARATULAS AUTOMATICAS
+------------------------------
+Al entrar un juego en la biblioteca -da igual si lo agregaste a mano, con el
+asistente o en un analisis automatico- Nebula le busca la ficha (descripcion,
+desarrollador, fecha, generos) y le descarga la caratula sin preguntar. Se ve
+aparecer sola en la biblioteca unos segundos despues de agregar el juego.
+
+Consulta Wikipedia, Wikidata y Steam, y prueba varias direcciones de imagen
+hasta que una devuelve una imagen de verdad. Todo eso se puede apagar en
+Ajustes -> Metadatos, y en la ficha de cada juego hay una pestana "Metadatos"
+para corregirla o reintentar la caratula a mano.
+
+Necesita conexion a internet; si no la hay, avisa y la biblioteca sigue
+funcionando igual (con la caratula generada a partir del nombre).
+
+COMO QUITARLO
+-------------
+- Instalado: Aplicaciones instaladas -> Nebula -> Desinstalar.
+- Portable: borra la carpeta donde lo descomprimiste.
+
+Tus datos se conservan siempre; si quieres borrarlos tambien, elimina la carpeta
+%APPDATA%\Nebula.
+
+SI EL PUERTO 4337 ESTA OCUPADO
+------------------------------
+Nebula lo avisa con una ventana. Abre una terminal y ejecuta:
+
+    Nebula.exe --port 4400
+
+Opciones disponibles:
+
+    --port, -p <n>     puerto (por defecto 4337)
+    --host <addr>      interfaz de escucha (por defecto 0.0.0.0)
+    --data-dir <dir>   otra carpeta de datos
+    --demo             biblioteca de ejemplo con 40 juegos ficticios
+    --open             abre la ventana de la aplicacion al iniciar
+    --no-open          no abre nada (solo arranca el servidor)
+    --browser          abre en el navegador en vez de en la ventana propia
+    --keep-alive       no se cierra al cerrar la ventana
+    --version, -v      version del programa
+
+Variables de entorno en lugar de opciones:
+
+    set NEBULA_PORT=4400
+    Nebula.exe
+
+AVISO DE WINDOWS
+----------------
+Si aparece el aviso azul "Windows protegio tu PC", pulsa "Mas informacion" y
+luego "Ejecutar de todas formas". Sale porque el programa no esta firmado con un
+certificado de pago; no es un virus.
+
+EN QUE ESTA HECHO
+-----------------
+La ventana es un programa de Windows en C# (Windows Forms) con toda la interfaz
+dentro; arranca el motor que va a su lado. El motor es el mismo de las versiones
+anteriores (Node empaquetado en un solo archivo). Esa mezcla es a proposito: la
+interfaz ya es nativa de verdad y el motor se puede ir pasando a C# por partes
+mas adelante, sin que tu tengas que cambiar nada mientras tanto.
+
+DE DONDE VIENE LA IDEA
+----------------------
+Nebula sigue la idea de Playnite (https://playnite.link), el gestor de
+biblioteca de juegos libre para Windows: una sola lista con todos tus juegos,
+con su ficha, su caratula y sus horas. Nebula es una version propia, en espanol
+y pensada para juegos instalados en carpetas tuyas, no para tiendas. Playnite
+tambien es un programa nativo de Windows, y ese es el camino que sigue Nebula.
+Todo el merito de la idea original es de sus autores.

@@ -1,0 +1,24 @@
+{
+  "name": "nebula",
+  "version": "1.4.0",
+  "private": true,
+  "description": "Gestor de biblioteca de juegos: unifica tus launcher, mide tiempo de juego y organiza tu coleccion.",
+  "type": "module",
+  "main": "server/index.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "demo": "node server/index.js --demo",
+    "open": "node server/index.js --open",
+    "test": "node --test test/*.test.js"
+  },
+  "keywords": [
+    "games",
+    "library",
+    "launcher",
+    "playtime"
+  ],
+  "license": "UNLICENSED"
+}

@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Nébula: la aplicación de Windows.
+
+    Este es el programa que se abre al hacer doble clic en Nebula.exe: una ventana
+    de Windows de verdad (WinForms) con toda la interfaz dentro: cada botón, cada
+    tarjeta y cada lista es un control de Windows, sin páginas ni navegadores.
+
+    Detalles elegidos a propósito:
+      · net48            → no hay que instalar ningún runtime: Windows 10/11 ya
+                           trae .NET Framework 4.8.
+      · WinExe           → programa de ventana: NUNCA abre la ventana negra de
+                           consola (la compilación lo comprueba después).
+      · Newtonsoft.Json  → leer y escribir el JSON de la API del motor.
+      · PlatformTarget   → x64, como el Node de 64 bits que va al lado.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>Nebula</AssemblyName>
+    <RootNamespace>Nebula.Ventana</RootNamespace>
+    <PlatformTarget>x64</PlatformTarget>
+    <LangVersion>7.3</LangVersion>
+    <ApplicationIcon>../../branding/icono.ico</ApplicationIcon>
+    <!-- la versión la pone la compilación con -p:Version=<la de package.json>;
+         de aquí salen solas la del ensamblado, la del archivo y la informativa -->
+    <Version>0.0.0</Version>
+    <Deterministic>true</Deterministic>
+    <DebugType>none</DebugType>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <NoWarn>NU1701;NU1603</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- en net48 los SDK-style no traen esta referencia puesta: la ventana habla
+         con el motor por HTTP, así que hay que nombrarla -->
+    <Reference Include="System.Net.Http" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <!-- permite compilar para .NET Framework 4.8 sin tener el paquete de
+         referencia instalado (la máquina de integración continua lo agradece) -->
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="All" />
+  </ItemGroup>
+
+</Project>
