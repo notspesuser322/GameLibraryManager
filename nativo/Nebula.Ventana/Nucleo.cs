@@ -3,9 +3,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
-using System.Threading;
+using System.Text;
 using System.Windows.Forms;
-using Microsoft.Web.WebView2.Core;
 
 namespace Nebula.Ventana
 {
@@ -13,15 +12,22 @@ namespace Nebula.Ventana
     /// El núcleo: `Nebula-nucleo.exe`.
     ///
     /// Es el motor de la biblioteca (el programa de siempre, con Node dentro):
-    /// escanea carpetas, guarda los datos, descarga las fichas y sirve la
-    /// interfaz. La ventana nativa no sabe nada de eso: solo lo arranca, espera a
-    /// que responda, dibuja la interfaz y, cuando se cierra, se lo lleva consigo.
+    /// escanea carpetas, guarda los datos, descarga las fichas y sirve la API que
+    /// esta ventana consume. La ventana solo lo arranca, espera a que responda y,
+    /// al cerrarse, se lo lleva consigo.
     /// </summary>
     internal sealed class Nucleo
     {
         private const string NombreNucleo = "Nebula-nucleo.exe";
 
         private Process proceso;
+        private bool externo;
+
+        /// <summary>¿Ya había un motor respondiendo en ese puerto? (otra ventana abierta)</summary>
+        public bool Externo
+        {
+            get { return externo; }
+        }
 
         /// <summary>Busca el núcleo junto al programa (o en la subcarpeta `nucleo`).</summary>
         public static string Buscar()
@@ -45,7 +51,7 @@ namespace Nebula.Ventana
             return null;
         }
 
-        /// <summary>Carpeta de datos del usuario (la misma que usa el núcleo).</summary>
+        /// <summary>Carpeta de datos del usuario (la misma que usa el motor).</summary>
         public static string CarpetaDatos(string deArgumentos)
         {
             if (!string.IsNullOrEmpty(deArgumentos)) return Path.GetFullPath(deArgumentos);
@@ -57,30 +63,34 @@ namespace Nebula.Ventana
             return Path.Combine(baseDatos, "Nebula");
         }
 
-        /// <summary>Carpeta donde WebView2 guarda su caché (dentro de los datos del usuario).</summary>
-        public static string CarpetaWebView2(string carpetaDatos)
-        {
-            return Path.Combine(carpetaDatos, "WebView2");
-        }
-
-        /// <summary>¿Está WebView2 en este equipo? (viene con Edge, en Windows 10 y 11)</summary>
-        public static bool WebView2Disponible()
-        {
-            try
-            {
-                string version = CoreWebView2Environment.GetAvailableBrowserVersionString();
-                return !string.IsNullOrEmpty(version);
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        /// <summary>Arranca el núcleo con los mismos argumentos, más los de la ventana.</summary>
+        /// <summary>Arranca el motor (o se conecta al que ya estuviera abierto).</summary>
         public void Arrancar(string rutaNucleo, string[] argumentos, int puerto)
         {
-            // el núcleo nunca abre ventana propia: la ventana la lleva este programa
+            if (Saludable(puerto))
+            {
+                /* ya hay una ventana de Nébula abierta: se usa su motor y no se
+                   arranca otro (dos motores se pisarían la biblioteca) */
+                externo = true;
+                Salida.Linea("ya habia un motor respondiendo en el puerto " + puerto + ": se usa ese");
+                return;
+            }
+
+            List<string> propios = ArgumentosDelMotor(argumentos, puerto, true);
+            ProcessStartInfo inicio = new ProcessStartInfo(rutaNucleo);
+            inicio.Arguments = Argumentos.Unir(propios);
+            inicio.UseShellExecute = false;
+            inicio.CreateNoWindow = true;
+            inicio.WindowStyle = ProcessWindowStyle.Hidden;
+            inicio.WorkingDirectory = Path.GetDirectoryName(rutaNucleo);
+
+            proceso = Process.Start(inicio);
+            if (proceso == null) throw new InvalidOperationException("no se pudo arrancar " + NombreNucleo);
+            Salida.Linea("motor arrancado (proceso " + proceso.Id + ")");
+        }
+
+        /// <summary>Argumentos para el motor: los mismos, sin los de la ventana.</summary>
+        private static List<string> ArgumentosDelMotor(string[] argumentos, int puerto, bool anadirPadre)
+        {
             List<string> propios = new List<string>();
             bool tienePuerto = false;
             for (int i = 0; i < argumentos.Length; i++)
@@ -89,7 +99,6 @@ namespace Nebula.Ventana
                 if (actual == "--open" || actual == "--no-open" || actual == "--browser" ||
                     actual == "--navegador" || actual == "--padre" || actual == "--keep-alive")
                 {
-                    // --padre lo pone esta ventana; --keep-alive solo habla de la ventana
                     if (actual == "--padre") i++;
                     continue;
                 }
@@ -102,21 +111,15 @@ namespace Nebula.Ventana
                 propios.Add(puerto.ToString());
             }
             propios.Add("--no-open");
-            propios.Add("--padre");
-            propios.Add(Process.GetCurrentProcess().Id.ToString());
-
-            ProcessStartInfo inicio = new ProcessStartInfo(rutaNucleo);
-            inicio.Arguments = Argumentos.Unir(propios);
-            inicio.UseShellExecute = false;
-            inicio.CreateNoWindow = true;
-            inicio.WindowStyle = ProcessWindowStyle.Hidden;
-            inicio.WorkingDirectory = Path.GetDirectoryName(rutaNucleo);
-
-            proceso = Process.Start(inicio);
-            if (proceso == null) throw new InvalidOperationException("no se pudo arrancar " + NombreNucleo);
+            if (anadirPadre)
+            {
+                propios.Add("--padre");
+                propios.Add(Process.GetCurrentProcess().Id.ToString());
+            }
+            return propios;
         }
 
-        /// <summary>Arranca el núcleo dejándole la ventana a él (cuando no hay WebView2).</summary>
+        /// <summary>Arranca el motor dejándole la ventana a él (cuando se pide el navegador).</summary>
         public static int Delegar(string rutaNucleo, string[] argumentos)
         {
             List<string> propios = new List<string>();
@@ -144,7 +147,7 @@ namespace Nebula.Ventana
             return hijo.ExitCode;
         }
 
-        /// <summary>Ejecuta el núcleo tal cual y devuelve su código (instalar, desinstalar…).</summary>
+        /// <summary>Ejecuta el motor tal cual y devuelve su código (instalar, desinstalar…).</summary>
         public static int EjecutarYEsperar(string rutaNucleo, string[] argumentos)
         {
             ProcessStartInfo inicio = new ProcessStartInfo(rutaNucleo);
@@ -157,33 +160,39 @@ namespace Nebula.Ventana
             return hijo.ExitCode;
         }
 
-        /// <summary>¿El núcleo ya responde?</summary>
+        /// <summary>¿El motor ya responde?</summary>
         public static bool Saludable(int puerto)
+        {
+            return Consultar(puerto, "/api/health").IndexOf("\"ok\":true", StringComparison.Ordinal) >= 0;
+        }
+
+        /// <summary>Petición corta al motor; devuelve el cuerpo o vacío si no contesta.</summary>
+        private static string Consultar(int puerto, string ruta)
         {
             try
             {
-                HttpWebRequest peticion = (HttpWebRequest)WebRequest.Create("http://127.0.0.1:" + puerto + "/api/health");
+                HttpWebRequest peticion = (HttpWebRequest)WebRequest.Create("http://127.0.0.1:" + puerto + ruta);
                 peticion.Timeout = 1500;
                 peticion.ReadWriteTimeout = 1500;
                 peticion.Method = "GET";
                 using (WebResponse respuesta = peticion.GetResponse())
                 using (StreamReader lector = new StreamReader(respuesta.GetResponseStream()))
                 {
-                    string cuerpo = lector.ReadToEnd();
-                    return cuerpo.IndexOf("\"ok\":true", StringComparison.Ordinal) >= 0;
+                    return lector.ReadToEnd();
                 }
             }
             catch
             {
-                return false;
+                return string.Empty;
             }
         }
 
-        /// <summary>¿Sigue vivo el proceso del núcleo?</summary>
+        /// <summary>¿Sigue vivo el proceso del motor?</summary>
         public bool Vivo
         {
             get
             {
+                if (externo) return true;
                 try
                 {
                     return proceso != null && !proceso.HasExited;
@@ -195,7 +204,7 @@ namespace Nebula.Ventana
             }
         }
 
-        /// <summary>Espera a que el núcleo termine (modo sin ventana propia).</summary>
+        /// <summary>Espera a que el motor termine (modo sin ventana propia).</summary>
         public int Esperar()
         {
             if (proceso == null) return 0;
@@ -204,16 +213,18 @@ namespace Nebula.Ventana
         }
 
         /// <summary>
-        /// Pide al núcleo que se cierre y espera un momento. Si hay un juego en
-        /// marcha el núcleo responde que sigue pendiente y se queda contando el
+        /// Pide al motor que se cierre y espera un momento. Si hay un juego en
+        /// marcha el motor responde que sigue pendiente y se queda contando el
         /// tiempo: en ese caso se le deja terminar solo (la ventana ya se cerró).
+        /// Si el motor lo arrancó otro (otra ventana), no se toca.
         /// </summary>
         public void Cerrar(int puerto, bool mantener, int esperaMs)
         {
+            if (externo) return;
             if (proceso == null) return;
             if (mantener)
             {
-                Salida.Linea("se deja el nucleo en marcha (--keep-alive)");
+                Salida.Linea("se deja el motor en marcha (--keep-alive)");
                 return;
             }
             PedirCierre(puerto);
@@ -221,7 +232,7 @@ namespace Nebula.Ventana
             {
                 if (!proceso.WaitForExit(esperaMs))
                 {
-                    Salida.Linea("el nucleo no termino a tiempo (¿hay un juego en marcha?): se le deja terminar solo");
+                    Salida.Linea("el motor no termino a tiempo (¿hay un juego en marcha?): se le deja terminar solo");
                 }
             }
             catch

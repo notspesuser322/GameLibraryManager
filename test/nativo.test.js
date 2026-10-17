@@ -19,7 +19,9 @@ const leer = (nombre) => fs.readFileSync(path.join(NATIVO, nombre), 'utf8');
 
 test('el proyecto de la ventana nativa está donde la compilación lo busca', () => {
   assert.ok(fs.existsSync(path.join(NATIVO, 'Nebula.Ventana.csproj')), 'falta el proyecto de C#');
-  for (const archivo of ['Program.cs', 'Nucleo.cs', 'Ventana.cs', 'Salida.cs']) {
+  for (const archivo of ['Program.cs', 'Nucleo.cs', 'VentanaPrincipal.cs', 'VistaBiblioteca.cs',
+    'DialogoJuego.cs', 'VistaBuscar.cs', 'VistaActividad.cs', 'VistaEstadisticas.cs',
+    'VistaAjustes.cs', 'Controles.cs', 'Tema.cs', 'Api.cs', 'Modelos.cs', 'Salida.cs']) {
     assert.ok(fs.existsSync(path.join(NATIVO, archivo)), `falta ${archivo}`);
   }
   assert.ok(fs.existsSync(path.join(ROOT, 'branding', 'icono.ico')), 'falta el icono del programa');
@@ -28,11 +30,28 @@ test('el proyecto de la ventana nativa está donde la compilación lo busca', ()
 test('la ventana es un programa de ventana, no de consola', () => {
   const proyecto = leer('Nebula.Ventana.csproj');
   assert.match(proyecto, /<OutputType>WinExe<\/OutputType>/, 'sin WinExe aparecería la ventana negra');
-  assert.match(proyecto, /<UseWindowsForms>true<\/UseWindowsForms>/);
+  assert.match(proyecto, /<UseWindowsForms>true<\/UseWindowsForms>/, 'la interfaz es nativa (WinForms)');
   assert.match(proyecto, /ApplicationIcon/, 'el programa lleva su icono');
-  assert.match(proyecto, /Microsoft\.Web\.WebView2/, 'la interfaz se dibuja con WebView2');
   assert.match(proyecto, /<TargetFramework>net48<\/TargetFramework>/, 'net48 ya viene con Windows');
   assert.match(proyecto, /ReferenceAssemblies/, 'compila sin depender del paquete de referencia instalado');
+  assert.match(proyecto, /Newtonsoft\.Json/, 'lee el JSON de la API');
+  assert.ok(!/PackageReference Include="Microsoft\.Web\.WebView2"/.test(proyecto), 'ya no hay navegador dentro del programa');
+});
+
+test('la interfaz es nativa: no queda ninguna vista web', () => {
+  const archivos = fs.readdirSync(NATIVO).filter((n) => n.endsWith('.cs'));
+  for (const archivo of archivos) {
+    const texto = leer(archivo);
+    assert.ok(!/CoreWebView2|EnsureCoreWebView2Async|Source = new Uri\("http/.test(texto), `${archivo} todavía carga una vista web`);
+  }
+  const biblioteca = leer('VistaBiblioteca.cs');
+  assert.match(biblioteca, /FlowLayoutPanel/, 'la rejilla es un control de Windows');
+  assert.match(biblioteca, /TarjetaJuego/, 'cada juego es una tarjeta nativa');
+  assert.match(biblioteca, /TextBox/, 'la búsqueda es un cuadro de texto de Windows');
+  const ventana = leer('VentanaPrincipal.cs');
+  assert.match(ventana, /Form/, 'la ventana es un formulario de Windows');
+  assert.match(ventana, /BotonLateral/, 'la navegación son botones nativos');
+  assert.match(ventana, /api\.LauncherAsync\(\)/, 'habla con el motor por su API');
 });
 
 test('la ventana sabe arrancar el núcleo y vigilarlo', () => {
@@ -42,17 +61,17 @@ test('la ventana sabe arrancar el núcleo y vigilarlo', () => {
   assert.match(nucleo, /--no-open/, 'el motor nunca abre ventana propia si manda la ventana nativa');
   assert.match(nucleo, /\/api\/shutdown/, 'pide el cierre ordenado al cerrarse');
   assert.match(nucleo, /\/api\/health/, 'espera a que el motor responda');
-  assert.match(nucleo, /WebView2Disponible/, 'comprueba que se puede dibujar antes de prometer ventana');
   assert.match(nucleo, /EjecutarYEsperar/, 'instalar y desinstalar los atiende el motor');
+  assert.match(nucleo, /class Argumentos/, 'compone la línea de órdenes con el citado de Windows');
 });
 
-test('la ventana se comporta como un programa, no como un navegador', () => {
-  const ventana = leer('Ventana.cs');
-  assert.match(ventana, /AreDefaultContextMenusEnabled = false/, 'sin el menú del navegador');
-  assert.match(ventana, /IsZoomControlEnabled = false/, 'sin zoom que rompa la interfaz');
-  assert.match(ventana, /NewWindowRequested/, 'los enlaces de fuera se abren fuera');
-  assert.match(ventana, /OnFormClosed/, 'al cerrar la ventana se apaga el motor');
-  assert.match(ventana, /AbrirFuera/, 'abre el navegador de siempre cuando hace falta');
+test('al cerrar la ventana se apaga el motor', () => {
+  const ventana = leer('VentanaPrincipal.cs');
+  assert.match(ventana, /OnFormClosed/, 'la ventana sabe cuándo se cierra');
+  assert.match(ventana, /vigilancia\.Stop\(\)/, 'deja de vigilar al cerrarse');
+  const programa = leer('Program.cs');
+  assert.match(programa, /nucleo\.Cerrar\(/, 'el programa pide el cierre del motor al salir');
+  assert.match(programa, /--keep-alive/, 'se puede dejar el motor en marcha a propósito');
 });
 
 test('el programa responde a --version y a --help sin consola', () => {
@@ -64,6 +83,31 @@ test('el programa responde a --version y a --help sin consola', () => {
   const salida = leer('Salida.cs');
   assert.match(salida, /Nebula-ventana\.log/);
   assert.match(salida, /OpenStandardOutput/);
+});
+
+test('el Código de la ventana se queda en C# 7.3 (lo que compila net48)', () => {
+  /* aquí no hay compilador: la única defensa es no escribir sintaxis más nueva */
+  const proyecto = leer('Nebula.Ventana.csproj');
+  assert.match(proyecto, /<LangVersion>7\.3<\/LangVersion>/, 'el proyecto fija el lenguaje');
+  const archivos = fs.readdirSync(NATIVO).filter((n) => n.endsWith('.cs'));
+  for (const archivo of archivos) {
+    const texto = leer(archivo);
+    assert.ok(!/\?\?=/.test(texto), `${archivo} usa «??=» (C# 8)`);
+    assert.ok(!/\busing var\b/.test(texto), `${archivo} usa «using var» (C# 8)`);
+    assert.ok(!/\bswitch\s*\{/.test(texto), `${archivo} usa una expresión switch (C# 8)`);
+    assert.ok(!/\bis not\b/.test(texto), `${archivo} usa «is not» (C# 9)`);
+    assert.ok(!/\bnew\(\)/.test(texto), `${archivo} usa «new()» sin tipo (C# 9)`);
+    assert.ok(!/\brecord\s+\w+\s*\(/.test(texto), `${archivo} declara un record (C# 9)`);
+    assert.ok(!/\binit\s*;/.test(texto), `${archivo} usa «init» (C# 9)`);
+  }
+});
+
+test('las fichas largas no empujan los botones: los datos van con barra', () => {
+  const dialogo = leer('DialogoJuego.cs');
+  assert.match(dialogo, /AutoScroll = true/, 'la ficha del juego se desplaza por dentro');
+  assert.match(dialogo, /MaximumSize/, 'el texto largo se parte en varias líneas');
+  const biblioteca = leer('VistaBiblioteca.cs');
+  assert.match(biblioteca, /AutoScroll = true/, 'la rejilla de juegos se desplaza');
 });
 
 test('la compilación sabe armar el reparto entre ventana y núcleo', async () => {
@@ -78,10 +122,10 @@ test('la compilación sabe armar el reparto entre ventana y núcleo', async () =
   const temporal = fs.mkdtempSync(path.join(os.tmpdir(), 'nebula-ventana-'));
   try {
     fs.writeFileSync(path.join(temporal, 'Nebula.exe'), 'MZ');
-    fs.writeFileSync(path.join(temporal, 'WebView2Loader.dll'), 'MZ');
+    fs.writeFileSync(path.join(temporal, 'Newtonsoft.Json.dll'), 'MZ');
     fs.mkdirSync(path.join(temporal, 'subcarpeta'));
     const recursos = assetsVentana(temporal);
-    assert.deepEqual(Object.keys(recursos).sort(), ['ventana/Nebula.exe', 'ventana/WebView2Loader.dll']);
+    assert.deepEqual(Object.keys(recursos).sort(), ['ventana/Nebula.exe', 'ventana/Newtonsoft.Json.dll']);
     assert.equal(recursos['ventana/Nebula.exe'], path.join(temporal, 'Nebula.exe'));
   } finally {
     fs.rmSync(temporal, { recursive: true, force: true });
@@ -93,7 +137,7 @@ test('el instalador coloca la ventana como programa y el núcleo al lado', async
   const origen = fs.mkdtempSync(path.join(os.tmpdir(), 'nebula-recursos-'));
   const destino = fs.mkdtempSync(path.join(os.tmpdir(), 'nebula-destino-'));
   try {
-    fs.writeFileSync(path.join(origen, 'WebView2Loader.dll'), 'MZ');
+    fs.writeFileSync(path.join(origen, 'Newtonsoft.Json.dll'), 'MZ');
     fs.writeFileSync(path.join(origen, 'Nebula.exe'), 'MZ');
     const lista = archivosVentana(origen, destino);
     assert.equal(lista.length, 2);

@@ -1,20 +1,19 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    Ventana nativa de Nébula.
+    Nébula: la aplicación de Windows.
 
     Este es el programa que se abre al hacer doble clic en Nebula.exe: una ventana
-    de Windows de verdad (WinForms) que arranca el núcleo (Nebula-nucleo.exe, el
-    motor que sirve la biblioteca) y dibuja la interfaz con WebView2.
+    de Windows de verdad (WinForms) con toda la interfaz dentro: cada botón, cada
+    tarjeta y cada lista es un control de Windows, sin páginas ni navegadores.
 
     Detalles elegidos a propósito:
       · net48            → no hay que instalar ningún runtime: Windows 10/11 ya
-                           trae .NET Framework 4.8. El programa ocupa poco.
+                           trae .NET Framework 4.8.
       · WinExe           → programa de ventana: NUNCA abre la ventana negra de
                            consola (la compilación lo comprueba después).
-      · WebView2         → el motor de dibujo que ya viene con Edge en Windows.
-      · PlatformTarget   → x64, como el Node de 64 bits que va al lado (el
-                           cargador de WebView2 que se copia junto al exe).
+      · Newtonsoft.Json  → leer y escribir el JSON de la API del motor.
+      · PlatformTarget   → x64, como el Node de 64 bits que va al lado.
   -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -35,8 +34,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- el control que dibuja la interfaz dentro de la ventana -->
-    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.*" />
+    <!-- en net48 los SDK-style no traen esta referencia puesta: la ventana habla
+         con el motor por HTTP, así que hay que nombrarla -->
+    <Reference Include="System.Net.Http" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <!-- permite compilar para .NET Framework 4.8 sin tener el paquete de
          referencia instalado (la máquina de integración continua lo agradece) -->
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="All" />

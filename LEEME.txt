@@ -30,9 +30,9 @@ direcciones. No es una pagina web abierta en un navegador.
   - Dentro, el motor (Nebula-nucleo.exe) hace el trabajo de siempre, asi que
     todo lo que tenias sigue igual.
 
-La ventana se dibuja con WebView2, el componente que ya trae Microsoft Edge en
-Windows 10 y 11: no hay que instalar nada. Si en algun equipo no estuviera,
-Nebula lo detecta y abre la biblioteca en el navegador de siempre, avisando.
+Toda la interfaz son controles de Windows: cada tarjeta, cada boton y cada lista
+los dibuja el propio programa. No hay ninguna pagina web dentro, ni WebView2, ni
+depende de Edge ni de Chrome: no hay que instalar nada.
 
 Si prefieres verlo en el navegador normal (o abrirlo desde el movil en tu red):
 
@@ -118,11 +118,11 @@ certificado de pago; no es un virus.
 
 EN QUE ESTA HECHO
 -----------------
-La ventana es un programa de Windows en C# (Windows Forms) que dibuja la
-interfaz con WebView2 y arranca el motor que va a su lado. El motor es el mismo
-de las versiones anteriores (Node empaquetado en un solo archivo). Esa mezcla es
-a proposito: la ventana ya es nativa y el motor se puede ir pasando a C# por
-partes mas adelante, sin que tu tengas que cambiar nada mientras tanto.
+La ventana es un programa de Windows en C# (Windows Forms) con toda la interfaz
+dentro; arranca el motor que va a su lado. El motor es el mismo de las versiones
+anteriores (Node empaquetado en un solo archivo). Esa mezcla es a proposito: la
+interfaz ya es nativa de verdad y el motor se puede ir pasando a C# por partes
+mas adelante, sin que tu tengas que cambiar nada mientras tanto.
 
 DE DONDE VIENE LA IDEA
 ----------------------

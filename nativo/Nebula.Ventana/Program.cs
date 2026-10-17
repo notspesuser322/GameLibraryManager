@@ -8,17 +8,19 @@ using System.Windows.Forms;
 namespace Nebula.Ventana
 {
     /// <summary>
-    /// Punto de entrada de la ventana nativa de Nébula.
+    /// Punto de entrada de Nébula.
     ///
-    /// Este programa hace tres cosas, según cómo se le llame:
-    ///   1. Sin nada más (`Nebula.exe`) → arranca el núcleo y abre la ventana.
-    ///   2. Con `--no-open`          → arranca el núcleo y se queda vigilando
+    /// Este programa ES la aplicación: una ventana de Windows nativa (WinForms)
+    /// que habla con el motor por la API local. Hace tres cosas, según cómo se le
+    /// llame:
+    ///   1. Sin nada más (`Nebula.exe`) → arranca el motor y abre la ventana.
+    ///   2. Con `--no-open`          → arranca el motor y se queda vigilando
     ///                                 (lo usa la integración continua).
     ///   3. Con `--version`, `--help`, `--uninstall`, `--install`… → responde o
-    ///      pasa la orden al núcleo, que es quien conoce el registro de Windows.
+    ///      pasa la orden al motor, que es quien conoce el registro de Windows.
     ///
-    /// El programa es de ventana (no de consola): nunca aparece la ventana negra,
-    /// ni siquiera un parpadeo. Lo que haga falta contar va al registro en archivo.
+    /// Es un programa de ventana (no de consola): nunca aparece la ventana negra.
+    /// Lo que haya que contar va al registro en archivo.
     /// </summary>
     internal static class Program
     {
@@ -30,43 +32,42 @@ namespace Nebula.Ventana
 
             Opciones opciones = Opciones.Leer(argumentos);
             string carpetaDatos = Nucleo.CarpetaDatos(opciones.CarpetaDatos);
-            Salida.Preparar(carpetaDatos);
 
+            /* responder a la terminal sin crear nada ni ensuciar la respuesta */
             if (opciones.Version)
             {
-                Salida.Linea("nebula " + VersionTexto());
+                Salida.Inmediata("nebula " + VersionTexto());
                 return 0;
             }
             if (opciones.Ayuda)
             {
-                Salida.Linea(Ayuda());
+                Salida.Inmediata(Ayuda());
                 return 0;
             }
+
+            Salida.Preparar(carpetaDatos);
 
             string nucleoRuta = Nucleo.Buscar();
             if (nucleoRuta == null)
             {
-                Salida.Error("no se encuentra el nucleo (Nebula-nucleo.exe) junto al programa");
+                Salida.Error("no se encuentra el motor (Nebula-nucleo.exe) junto al programa");
                 Aviso.Mostrar("Nébula no puede arrancar",
                     "No se encuentra Nebula-nucleo.exe en la misma carpeta que el programa.\n\n" +
                     "Vuelve a instalarlo o descomprime el ZIP entero (los dos archivos van juntos).");
                 return 2;
             }
-            Salida.Linea("nucleo: " + nucleoRuta + " · version " + VersionTexto());
+            Salida.Linea("motor: " + nucleoRuta + " · version " + VersionTexto());
 
-            /* instalar o desinstalar: lo hace el núcleo, que es quien escribe el registro */
+            /* instalar o desinstalar: lo hace el motor, que es quien escribe el registro */
             if (opciones.PideInstalacion)
             {
                 return Nucleo.EjecutarYEsperar(nucleoRuta, argumentos);
             }
 
-            bool quiereVentana = opciones.AbrirVentana;
-            bool puedeDibujar = quiereVentana && !opciones.Navegador && Nucleo.WebView2Disponible();
-            if (quiereVentana && !puedeDibujar)
+            if (opciones.Navegador)
             {
-                Salida.Linea(opciones.Navegador
-                    ? "se abre en el navegador (--browser)"
-                    : "no hay WebView2 en este equipo: se abre con la ventana de siempre");
+                /* a petición expresa, se abre en el navegador de siempre */
+                Salida.Linea("se abre en el navegador (--browser)");
                 return Nucleo.Delegar(nucleoRuta, argumentos);
             }
 
@@ -74,37 +75,45 @@ namespace Nebula.Ventana
             try
             {
                 nucleo.Arrancar(nucleoRuta, argumentos, opciones.Puerto);
-                Salida.Linea("nucleo arrancado en el puerto " + opciones.Puerto);
             }
             catch (Exception error)
             {
-                Salida.Error("no se pudo arrancar el nucleo: " + error.Message);
+                Salida.Error("no se pudo arrancar el motor: " + error.Message);
                 Aviso.Mostrar("Nébula no puede arrancar", "No se pudo iniciar el motor del programa:\n\n" + error.Message);
                 return 3;
             }
 
-            if (!puedeDibujar)
+            if (opciones.NoAbrir)
             {
-                /* --no-open: no hay ventana, pero el núcleo tiene que seguir vivo y
-                   apagarse cuando el núcleo termine (o cuando se cierre este proceso) */
+                /* sin ventana (integración continua o uso desde la terminal): el
+                   proceso vive lo que viva el motor */
                 int codigo = nucleo.Esperar();
                 nucleo.Dispose();
                 return codigo;
             }
 
+            int salida = 0;
             try
             {
-                using (Ventana ventana = new Ventana(opciones.Puerto, nucleo, opciones.KeepAlive, carpetaDatos))
+                using (Api api = new Api(opciones.Puerto))
+                using (VentanaPrincipal ventana = new VentanaPrincipal(api, nucleo, opciones.Puerto, VersionTexto(), carpetaDatos))
                 {
                     Application.Run(ventana);
                 }
+            }
+            catch (Exception error)
+            {
+                Salida.Error("la ventana falló: " + error);
+                Aviso.Mostrar("Nébula no puede abrirse", "La ventana del programa falló:\n\n" + error.Message +
+                    "\n\nEn %APPDATA%\\Nebula\\Nebula-ventana.log está el detalle.");
+                salida = 4;
             }
             finally
             {
                 nucleo.Cerrar(opciones.Puerto, opciones.KeepAlive, 8000);
                 nucleo.Dispose();
             }
-            return 0;
+            return salida;
         }
 
         /// <summary>
@@ -150,7 +159,7 @@ namespace Nebula.Ventana
                    "  Nebula.exe --keep-alive         deja el motor en marcha al cerrar la ventana\n" +
                    "  Nebula.exe --version            muestra la version y termina\n" +
                    "  Nebula.exe --uninstall          quita el programa del equipo\n\n" +
-                   "Los datos y el registro (Nebula.log) estan en %APPDATA%\\Nebula.";
+                   "Los datos y los registros (Nebula.log y Nebula-ventana.log) estan en %APPDATA%\\Nebula.";
         }
     }
 
@@ -172,7 +181,7 @@ namespace Nebula.Ventana
             get { return !NoAbrir; }
         }
 
-        /// <summary>Instalar, reinstalar o desinstalar: lo hace el núcleo.</summary>
+        /// <summary>Instalar, reinstalar o desinstalar: lo hace el motor.</summary>
         public bool PideInstalacion
         {
             get { return pideInstalacion; }
@@ -196,8 +205,9 @@ namespace Nebula.Ventana
                         opciones.CarpetaDatos = Siguiente(argumentos, ref i);
                         break;
                     case "--demo":
+                        break;
                     case "--host":
-                        if (actual == "--host") Siguiente(argumentos, ref i);
+                        Siguiente(argumentos, ref i);
                         break;
                     case "--open":
                         opciones.Abrir = true;
@@ -232,7 +242,7 @@ namespace Nebula.Ventana
                         break;
                 }
             }
-            /* NEBULA_PORT, igual que en el núcleo */
+            /* NEBULA_PORT, igual que en el motor */
             string entorno = Environment.GetEnvironmentVariable("NEBULA_PORT");
             if (opciones.Puerto == ProgramaConstantes.PuertoPorDefecto && !string.IsNullOrEmpty(entorno))
             {

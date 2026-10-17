@@ -37,16 +37,16 @@ npm start                    →  http://localhost:4337 (ejecutándolo desde el 
 ## Requisitos
 
 - **Node.js 18 o superior** (probado en Node 22). No hace falta `npm install`.
-- Windows, macOS o Linux.
-- Chrome o Edge para la ventana propia de la aplicación (si no hay ninguno, la interfaz se abre
-  en el navegador de siempre).
+- Windows 10 u 11 (la ventana nativa es un programa de Windows).
+- Nada más: ni Node, ni navegadores, ni tiempos de ejecución que instalar. En macOS y Linux
+  queda el motor (la API sigue disponible con `node server/index.js`).
 
 Nébula es un **programa de Windows con ventana propia**. Está partido en dos piezas, y es a
 propósito:
 
 | Archivo | Qué es |
 | --- | --- |
-| `Nebula.exe` | La **ventana**, escrita en C# (Windows Forms). Arranca el motor, espera a que responda, dibuja la interfaz con **WebView2** y vigila que todo se apague al cerrar. |
+| `Nebula.exe` | La **aplicación**, escrita en C# (Windows Forms). Toda la interfaz son controles de Windows —sin WebView2 ni navegador—: arranca el motor, espera a que responda, pinta la biblioteca y vigila que todo se apague al cerrar. |
 | `Nebula-nucleo.exe` | El **motor** (Node empaquetado en un archivo): escaneos, fichas, carátulas, biblioteca, medición de tiempo. |
 
 Qué significa en la práctica:
@@ -56,9 +56,9 @@ Qué significa en la práctica:
 - **Nada corriendo por detrás.** Si cierras la ventana, el motor se apaga con ella; si la ventana
   se cayera, el motor lo detecta (se le pasa `--padre <pid>`) y se apaga solo. Si hay un juego en
   marcha, se sigue midiendo el tiempo hasta que termines y entonces se apaga.
-- **Sin instalar nada raro.** La ventana usa .NET Framework 4.8 (viene con Windows) y WebView2
-  (viene con Microsoft Edge); el motor no necesita Node instalado. Si en algún equipo no hubiera
-  WebView2, Nébula lo detecta y abre la biblioteca en el navegador de siempre, avisando.
+- **Sin instalar nada raro.** La aplicación usa .NET Framework 4.8 (viene con Windows) y dibuja
+  cada tarjeta y cada botón con controles nativos: no depende de Edge, de Chrome ni de WebView2.
+  El motor no necesita Node instalado.
 - **Todo queda anotado.** Como no hay consola, lo que cuenta el programa va a `%APPDATA%\Nebula`:
   `Nebula.log` (motor) y `Nebula-ventana.log` (ventana). Es lo primero que hay que mirar si algo
   no funciona.
@@ -386,14 +386,14 @@ Toda la interfaz usa esta API local (JSON). Útil para automatizar o integrar co
 
 ```
 nativo/
-  Nebula.Ventana/  la ventana del programa (C#): arranca el núcleo, dibuja con WebView2 y lo vigila
+  Nebula.Ventana/  la aplicación (C#/WinForms): interfaz nativa, arranca el núcleo y lo vigila
 server/
   index.js     servidor HTTP, API y archivos estáticos
   assets.js    rutas de la app: funcionan igual desde el código y dentro del ejecutable
   console.js   salida por consola legible en cualquier codificación (Windows incluido)
   registro.js  registro en archivo (Nebula.log): el motor no tiene consola donde contar nada
   install.js   instalación y desinstalación en Windows (accesos directos, registro)
-  desktop.js   ventana propia de la aplicación (Chrome/Edge en modo aplicación, WebView en Windows)
+  desktop.js   modo navegador opcional del motor (Chrome/Edge en modo aplicación); la aplicación nativa no lo usa
   http.js      cabeceras de las peticiones a las fuentes externas (agente e imagen de referencia)
   version.js   la versión, en un solo sitio
   sea.js       extrae la interfaz incrustada cuando corre como ejecutable único

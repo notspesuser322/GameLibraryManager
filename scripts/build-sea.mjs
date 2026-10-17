@@ -23,9 +23,9 @@ import { leerSubsistema, quitarConsolaDelEjecutable, describirSubsistema, SUBSIS
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SENTINEL = 'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2';
-/* ventana nativa (C#): el programa que ve el usuario. El nucleo de Node es el
-   motor que sirve la biblioteca; la ventana solo lo arranca, lo vigila y dibuja
-   la interfaz con WebView2. */
+/* ventana nativa (C#): el programa que ve el usuario. Toda la interfaz esta
+   dibujada con controles de Windows (sin navegador); el nucleo de Node es el
+   motor que sirve la biblioteca y la ventana solo lo arranca y lo vigila. */
 const PROYECTO_VENTANA = path.join(ROOT, 'nativo', 'Nebula.Ventana', 'Nebula.Ventana.csproj');
 const VERSION_PAQUETE = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
 
@@ -130,12 +130,6 @@ export async function construirVentana({ log = write, forzar = false } = {}) {
     '-o', salida,
   ], { stdio: 'inherit', cwd: ROOT });
 
-  /* el cargador de WebView2 puede venir en una subcarpeta de plataforma: se sube
-     junto al ejecutable para que la carpeta sea autosuficiente */
-  const cargador = path.join(salida, 'runtimes', 'win-x64', 'native', 'WebView2Loader.dll');
-  if (fs.existsSync(cargador) && !fs.existsSync(path.join(salida, 'WebView2Loader.dll'))) {
-    fs.copyFileSync(cargador, path.join(salida, 'WebView2Loader.dll'));
-  }
   const exe = path.join(salida, 'Nebula.exe');
   if (!fs.existsSync(exe)) throw new Error('la compilación de la ventana nativa no produjo Nebula.exe');
   comprobarVentana(exe, log);
@@ -304,6 +298,14 @@ if (isMain) {
       }
       fs.copyFileSync(nucleoOut, path.join(carpeta, 'Nebula-nucleo.exe'));
       fs.copyFileSync(path.join(dirVentana, 'Nebula.exe'), out);
+      /* el programa suelto en dist/ tambien necesita sus piezas al lado:
+         sin Newtonsoft.Json.dll no arrancaria al probarlo desde ahi */
+      for (const [clave, origen] of Object.entries(assetsVentana(dirVentana))) {
+        const nombre = clave.replace('ventana/', '');
+        if (nombre === path.basename(out)) continue;
+        const destino = path.join(path.dirname(out), nombre);
+        if (!fs.existsSync(destino)) fs.copyFileSync(origen, destino);
+      }
       /* y el núcleo también en la raíz de dist, para poder probarlo suelto */
       write(`carpeta lista: ${path.relative(ROOT, carpeta)} (ventana + nucleo + LEEME)`);
       write(`programa: ${path.basename(out)} abre su ventana; motor: ${path.basename(nucleoOut)}`);

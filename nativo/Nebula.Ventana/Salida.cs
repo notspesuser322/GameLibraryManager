@@ -43,6 +43,17 @@ namespace Nebula.Ventana
             get { return ruta; }
         }
 
+        /// <summary>
+        /// Escribe solo en la salida heredada, sin tocar el registro. Se usa para
+        /// `--version` y `--help`: ahí lo que importa es responder a la terminal y
+        /// no ensuciar su salida con la cabecera del día.
+        /// </summary>
+        public static void Inmediata(string texto)
+        {
+            if (texto == null) return;
+            lock (Candado) EscribirEstandar(texto);
+        }
+
         /// <summary>Escribe una línea en el registro y, si hay, en la salida heredada.</summary>
         public static void Linea(string texto)
         {
@@ -67,9 +78,9 @@ namespace Nebula.Ventana
                 /* Sin `using`: no hay que cerrar un manejador que no es nuestro. */
                 Stream salida = Console.OpenStandardOutput();
                 if (salida == null) return;
-                StreamWriter escritor = new StreamWriter(salida, new UTF8Encoding(false));
-                escritor.WriteLine(texto);
-                escritor.Flush();
+                byte[] datos = new UTF8Encoding(false).GetBytes(texto + "\r\n");
+                salida.Write(datos, 0, datos.Length);
+                salida.Flush();
             }
             catch
             {
