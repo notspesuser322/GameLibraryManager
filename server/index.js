@@ -54,6 +54,7 @@ function parseArgs(argv) {
     browser: false,
     keepAlive: false,
     dataDir: null,
+    padre: 0,
   };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -65,6 +66,8 @@ function parseArgs(argv) {
     else if (arg === '--browser' || arg === '--navegador') args.browser = true;
     else if (arg === '--keep-alive') args.keepAlive = true;
     else if (arg === '--data-dir') args.dataDir = argv[++i];
+    /* pid de quien manda (la ventana nativa): si desaparece, el nucleo se cierra */
+    else if (arg === '--padre') args.padre = Number(argv[++i]) || 0;
     else if (arg === '--version' || arg === '-v') args.version = true;
     else if (arg === '--help' || arg === '-h') args.help = true;
   }
@@ -93,6 +96,7 @@ Uso: node server/index.js [opciones]
   --open            abre la aplicacion en su ventana al iniciar
   --browser         abre en el navegador en vez de en la ventana propia
   --keep-alive      no se cierra al cerrar la ventana
+  --padre <pid>     se cierra cuando ese programa termine (lo usa la ventana nativa)
   --version, -v     muestra la version y termina
 
 Variables de entorno:
@@ -139,6 +143,7 @@ async function bootstrap() {
   });
   launcher.on('session:start', ({ game }) => console.log(`  ▶  ${game.name}`));
   launcher.start();
+  vigilarPadre();
 }
 
 /* -------------------------------------------------------------- demo helpers */
@@ -678,6 +683,22 @@ async function handleApi(req, res, pathname, query) {
       assetsRoot: ROOT_DIR,
       now: nowIso(),
     });
+  }
+
+  if (resource === 'shutdown' && method === 'POST') {
+    /* la ventana nativa pide el cierre al cerrarse. Si hay un juego en marcha se
+       responde que sigue pendiente y el proceso termina cuando el juego acabe,
+       para no perder el tiempo jugado. */
+    const activos = launcher ? Object.keys(launcher.status().sessions || {}).length : 0;
+    if (activos > 0) return json(res, 200, { ok: true, pendiente: true, juegos: activos });
+    json(res, 200, { ok: true, pendiente: false });
+    setTimeout(async () => {
+      try {
+        await store.flush();
+      } catch { /* se cierra igual */ }
+      cerrarYsalir().catch(() => {});
+    }, 60);
+    return;
   }
 
   if (resource === 'state') {
@@ -1406,6 +1427,45 @@ async function main() {
     }
     process.exit(1);
   });
+}
+
+/**
+ * Vigilancia de quien manda (la ventana nativa).
+ *
+ * La ventana nativa arranca el nucleo con `--padre <su pid>`. Asi, si la ventana
+ * se cierra de golpe o se queda sin memoria, el nucleo no se queda corriendo
+ * solo por detras: se apaga igual que si se hubiera cerrado bien. Si hay un
+ * juego en marcha se sigue contando el tiempo hasta que termine, igual que
+ * cuando se cierra la ventana a mano.
+ *
+ * El intervalo se puede acortar con NEBULA_PADRE_INTERVALO (lo usan las pruebas).
+ */
+function vigilarPadre() {
+  const padre = Number(args.padre) || 0;
+  if (!padre || padre <= 0) return;
+  const intervalo = Number(process.env.NEBULA_PADRE_INTERVALO) || 3000;
+  let avisado = false;
+  const reloj = setInterval(() => {
+    let vivo = true;
+    try {
+      process.kill(padre, 0);
+    } catch {
+      vivo = false;
+    }
+    if (vivo) return;
+    const activos = launcher ? Object.keys(launcher.status().sessions || {}).length : 0;
+    if (activos > 0) {
+      if (!avisado) {
+        console.log(`  La ventana desaparecio, pero hay ${activos} juego(s) en marcha: se sigue contando el tiempo.`);
+        avisado = true;
+      }
+      return;
+    }
+    console.log('  La ventana desaparecio: cerrando el programa.');
+    clearInterval(reloj);
+    cerrarYsalir().catch(() => {});
+  }, intervalo);
+  reloj.unref?.();
 }
 
 async function shutdown(signal) {

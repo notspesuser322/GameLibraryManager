@@ -18,6 +18,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { VERSION } from './version.js';
+import { resolveAssets } from './assets.js';
 import { argumentos, argumentosVbs, cabeceraVbs } from './powershell.js';
 
 export const NOMBRE = 'Nebula';          /* carpeta y ejecutable, sin tildes */
@@ -40,6 +41,8 @@ export function rutasInstalacion({
   return {
     dir,
     exe: path.join(dir, `${NOMBRE}.exe`),
+    /* el nucleo (el motor que sirve la biblioteca) va aparte de la ventana */
+    nucleo: path.join(dir, `${NOMBRE}-nucleo.exe`),
     lanzador: path.join(dir, `${NOMBRE}.cmd`),
     lanzadorOculto: path.join(dir, `${NOMBRE}.vbs`),
     menu: path.join(roaming, 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
@@ -99,6 +102,37 @@ export function scriptBorrarAccesosDirectos() {
     '  if (Test-Path $lnk) { Remove-Item $lnk -Force }',
     '}',
   ].join('\n');
+}
+
+/**
+ * Archivos de la ventana nativa (C#) que hay que copiar junto al programa.
+ *
+ * En el instalador van incrustados (carpeta `ventana/` de los recursos), así que
+ * aquí solo hay que decidir qué se copia y con qué nombre. Devuelve una lista
+ * vacía si no hay ventana nativa (por ejemplo, ejecutando desde el repositorio):
+ * en ese caso el instalador se instala a sí mismo como programa, como antes.
+ *
+ * @param {string} dirVentana carpeta con los archivos compilados
+ * @param {string} destino    carpeta de instalación
+ * @returns {Array<{origen: string, destino: string, nombre: string}>}
+ */
+export function archivosVentana(dirVentana, destino) {
+  let entradas = [];
+  try {
+    entradas = fs.readdirSync(dirVentana, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const archivos = entradas
+    .filter((e) => e.isFile())
+    .map((e) => e.name)
+    /* el ejecutable primero: si algo falla, al menos queda el programa */
+    .sort((a, b) => (a.toLowerCase() === `${NOMBRE}.exe`.toLowerCase() ? -1 : b.toLowerCase() === `${NOMBRE}.exe`.toLowerCase() ? 1 : a.localeCompare(b)));
+  return archivos.map((nombre) => ({
+    origen: path.join(dirVentana, nombre),
+    destino: path.join(destino, nombre),
+    nombre,
+  }));
 }
 
 /**
@@ -356,21 +390,46 @@ export async function instalar({ origen = process.execPath, silencioso = false, 
     if (!silencioso) escribir(`\n  Instalando ${NOMBRE} ${version()}…\n`);
     fs.mkdirSync(rutas.dir, { recursive: true });
 
-    /* 1. el programa: una copia del propio instalador */
-    const destino = rutas.exe;
-    if (path.resolve(origen).toLowerCase() !== path.resolve(destino).toLowerCase()) {
-      fs.copyFileSync(origen, destino);
-      registrar(`programa copiado (${fs.statSync(destino).size} bytes)`);
+    /* 1. el programa. Si el instalador trae dentro la ventana nativa (C#), se
+       copia tal cual y el propio instalador queda al lado como núcleo (el motor
+       que sirve la biblioteca y atiende la desinstalación). Si no la trae —por
+       ejemplo ejecutando desde el repositorio— se instala a sí mismo, como antes:
+       el programa sigue funcionando con su ventana de siempre. */
+    const recursos = resolveAssets();
+    const nativos = archivosVentana(path.join(recursos.root, 'ventana'), rutas.dir);
+    const tieneVentana = nativos.some((f) => f.nombre.toLowerCase() === `${NOMBRE}.exe`.toLowerCase());
+    if (tieneVentana) {
+      for (const archivo of nativos) {
+        fs.copyFileSync(archivo.origen, archivo.destino);
+      }
+      registrar(`ventana nativa copiada (${nativos.map((f) => f.nombre).join(', ')})`);
+      if (path.resolve(origen).toLowerCase() !== path.resolve(rutas.nucleo).toLowerCase()) {
+        fs.copyFileSync(origen, rutas.nucleo);
+        registrar(`nucleo copiado (${fs.statSync(rutas.nucleo).size} bytes)`);
+      }
       if (!silencioso) escribir(`  Programa:  ${rutas.dir}`);
     } else {
-      registrar('ya se está ejecutando desde la carpeta de instalación: no se copia');
+      registrar('aviso: no hay ventana nativa dentro del instalador; se instala el nucleo como programa');
+      const destino = rutas.exe;
+      if (path.resolve(origen).toLowerCase() !== path.resolve(destino).toLowerCase()) {
+        fs.copyFileSync(origen, destino);
+        registrar(`programa copiado (${fs.statSync(destino).size} bytes)`);
+        if (!silencioso) escribir(`  Programa:  ${rutas.dir}`);
+      } else {
+        registrar('ya se está ejecutando desde la carpeta de instalación: no se copia');
+      }
     }
 
-    /* 2. lanzador de consola (opcional) y lanzador oculto que usan los accesos directos */
-    const lanzador = `@echo off\r\ntitle ${NOMBRE_VISIBLE}\r\ncd /d "%~dp0"\r\n${NOMBRE}.exe %*\r\n`;
-    fs.writeFileSync(rutas.lanzador, lanzador, 'latin1');
+    /* 2. solo el lanzador oculto: al abrir Nébula desde el menú Inicio no aparece
+       ninguna ventana de consola. Los lanzadores de consola de versiones
+       anteriores se borran. */
     fs.writeFileSync(rutas.lanzadorOculto, lanzadorOculto(), 'latin1');
-    registrar('lanzadores escritos (consola y oculto)');
+    for (const sobrante of [`${NOMBRE}.cmd`, `${NOMBRE}.bat`]) {
+      try {
+        fs.rmSync(path.join(rutas.dir, sobrante), { force: true });
+      } catch { /* no estaba */ }
+    }
+    registrar('lanzador oculto escrito (sin ventana de consola)');
 
     /* 3. accesos directos en el menú Inicio y en el escritorio */
     try {

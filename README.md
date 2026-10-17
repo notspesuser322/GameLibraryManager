@@ -8,8 +8,8 @@ Proyecto propio, pensado para uso personal y privado. Funciona **sin dependencia
 externas**: solo necesita Node.js. No hay cuentas, ni nube, ni telemetría.
 
 ```
-Nebula-1.3.0-instalador.exe  →  doble clic; se instala y abre Nébula en su ventana
-Nebula-1.3.0-portable.zip    →  descomprimir y abrir Nebula.exe
+Nebula-1.4.0-instalador.exe  →  doble clic; se instala y abre Nébula en su ventana
+Nebula-1.4.0-portable.zip    →  descomprimir y abrir Nebula.exe
 npm start                    →  http://localhost:4337 (ejecutándolo desde el código)
 ```
 
@@ -41,14 +41,30 @@ npm start                    →  http://localhost:4337 (ejecutándolo desde el 
 - Chrome o Edge para la ventana propia de la aplicación (si no hay ninguno, la interfaz se abre
   en el navegador de siempre).
 
-Nébula se comporta como un programa de escritorio: abre **su propia ventana**, sin barra de
-direcciones ni pestañas, con su icono en la barra de tareas, y se cierra al cerrar esa ventana.
-El ejecutable de Windows está marcado como **programa de ventana**: no abre ninguna consola, ni
-deja procesos sueltos corriendo por detrás (al cerrar la ventana, el programa termina). Por dentro
-usa el navegador ya instalado en «modo aplicación» (`--app=`), así que la ventana es nativa, rápida
-y no hay que instalar ni Electron ni nada parecido; el paso siguiente, si hace falta, sería una
-ventana propia con WebView2. La dirección `http://localhost:4337` sigue disponible si quieres
-abrirlo también en el navegador o desde el celular.
+Nébula es un **programa de Windows con ventana propia**. Está partido en dos piezas, y es a
+propósito:
+
+| Archivo | Qué es |
+| --- | --- |
+| `Nebula.exe` | La **ventana**, escrita en C# (Windows Forms). Arranca el motor, espera a que responda, dibuja la interfaz con **WebView2** y vigila que todo se apague al cerrar. |
+| `Nebula-nucleo.exe` | El **motor** (Node empaquetado en un archivo): escaneos, fichas, carátulas, biblioteca, medición de tiempo. |
+
+Qué significa en la práctica:
+
+- **Ninguna consola.** `Nebula.exe` está compilado como programa de ventana: no aparece la ventana
+  negra, ni al abrirlo con doble clic ni al pasarle órdenes desde una terminal.
+- **Nada corriendo por detrás.** Si cierras la ventana, el motor se apaga con ella; si la ventana
+  se cayera, el motor lo detecta (se le pasa `--padre <pid>`) y se apaga solo. Si hay un juego en
+  marcha, se sigue midiendo el tiempo hasta que termines y entonces se apaga.
+- **Sin instalar nada raro.** La ventana usa .NET Framework 4.8 (viene con Windows) y WebView2
+  (viene con Microsoft Edge); el motor no necesita Node instalado. Si en algún equipo no hubiera
+  WebView2, Nébula lo detecta y abre la biblioteca en el navegador de siempre, avisando.
+- **Todo queda anotado.** Como no hay consola, lo que cuenta el programa va a `%APPDATA%\Nebula`:
+  `Nebula.log` (motor) y `Nebula-ventana.log` (ventana). Es lo primero que hay que mirar si algo
+  no funciona.
+
+La dirección `http://localhost:4337` sigue disponible si quieres abrirlo también en el navegador o
+desde el celular (`nebula.exe --browser`).
 
 Nada de lo que hace el programa se ve por consola, así que todo queda anotado en
 `%APPDATA%\Nebula\Nebula.log`: ahí está el arranque, los análisis de carpetas, las fichas y
@@ -72,17 +88,19 @@ Se instala en tu carpeta de usuario, sin pedir permisos de administrador, y adem
 El instalador y el programa son el mismo archivo: la copia instalada detecta dónde está y arranca
 la biblioteca en lugar de instalarse otra vez.
 
-**Portable.** Descarga `Nebula-<versión>-portable.zip`, descomprímelo y abre `Nebula.exe`
-desde donde lo tengas. No se instala nada en el sistema.
+**Portable.** Descarga `Nebula-<versión>-portable.zip`, **descomprímelo entero** y abre
+`Nebula.exe` desde donde lo tengas. El ZIP trae la ventana y el motor (`Nebula-nucleo.exe`): van
+juntos, si mueves el programa mueve los dos. No se instala nada en el sistema.
 
 En los dos casos los datos van a `%APPDATA%\Nebula` (no junto al programa) y se conservan si
 reinstalas o desinstalas. Se abre la ventana de la aplicación en `http://localhost:4337`, y desde
 la terminal sirve el mismo ejecutable: `Nebula.exe --port 4400 --demo`.
 
-El instalador crea los accesos directos apuntando al propio `Nebula.exe` (con su icono), de modo
-que al abrir Nébula desde el menú Inicio o el escritorio **no aparece ninguna ventana de consola**:
-se abre directamente la ventana de la aplicación. En la carpeta de instalación no queda ningún
-archivo intermedio: ni lanzadores `.bat`, ni `.cmd`, ni `.vbs`.
+El instalador copia la ventana y el motor a `%LOCALAPPDATA%\Programs\Nebula` y crea los accesos
+directos con el icono del programa, de modo que al abrirlo desde el menú Inicio o el escritorio
+**no aparece ninguna ventana de consola**. En la carpeta solo quedan `Nebula.exe`,
+`Nebula-nucleo.exe` y un `Nebula.vbs` invisible que usan los accesos directos (no hay lanzadores
+`.bat` ni `.cmd`).
 
 ### Publicación automática (una sola vez)
 
@@ -367,11 +385,13 @@ Toda la interfaz usa esta API local (JSON). Útil para automatizar o integrar co
 ## Estructura del proyecto
 
 ```
+nativo/
+  Nebula.Ventana/  la ventana del programa (C#): arranca el núcleo, dibuja con WebView2 y lo vigila
 server/
   index.js     servidor HTTP, API y archivos estáticos
   assets.js    rutas de la app: funcionan igual desde el código y dentro del ejecutable
   console.js   salida por consola legible en cualquier codificación (Windows incluido)
-  registro.js  registro en archivo (Nebula.log): el programa no tiene consola donde contar nada
+  registro.js  registro en archivo (Nebula.log): el motor no tiene consola donde contar nada
   install.js   instalación y desinstalación en Windows (accesos directos, registro)
   desktop.js   ventana propia de la aplicación (Chrome/Edge en modo aplicación, WebView en Windows)
   http.js      cabeceras de las peticiones a las fuentes externas (agente e imagen de referencia)
@@ -391,7 +411,8 @@ public/
   js/          app, estado, componentes, vistas (biblioteca, ficha, actividad, estadísticas, buscar, ajustes)
 test/          pruebas: almacén, detección, lanzador, arte, metadatos, registro, instalación y API
 scripts/
-  build-sea.mjs     construye los ejecutables (portable e instalador) con Node + esbuild + postject
+  build-sea.mjs     construye los ejecutables (portable e instalador): compila la ventana en C#,
+                    empaqueta el núcleo con Node + esbuild + postject y arma el reparto de los dos
   pe-subsystem.mjs  marca el ejecutable como programa de ventana (sin la ventana de consola)
   brand-exe.mjs     pone el icono y los datos del programa dentro del ejecutable
   installer-main.js arranque del instalador: instala, abre el programa o desinstala
@@ -424,7 +445,10 @@ ejecutable, registro, borrado por lotes y detección de "ya instalado"), trece c
 descarga de carátulas contra fuentes simuladas (imagen válida, HTML con respuesta 200, 404,
 tiempo agotado, respaldo entre direcciones), ocho el modo ventana (detección de navegador,
 argumentos de la ventana, apertura, cierre del programa al cerrar la ventana y `--keep-alive`),
-cinco la marca de programa de ventana del ejecutable y cinco el registro en archivo.
+cinco la marca de programa de ventana del ejecutable, cinco el registro en archivo, siete la
+ventana nativa (proyecto de C#, reparto entre ventana y motor y recursos del instalador) y tres el
+reparto de mando (el motor se apaga solo si desaparece la ventana, atiende la petición de cierre y
+no se apaga si nadie se lo pide).
 
 ## Limitaciones conocidas
 
@@ -445,7 +469,8 @@ cinco la marca de programa de ventana del ejecutable y cinco el registro en arch
 
 - **La idea original es de [Playnite](https://playnite.link)** (https://github.com/JosefNemec/Playnite),
   el gestor de biblioteca de juegos libre para Windows: una sola lista con todos tus juegos, su
-  ficha, su carátula y sus horas, con la ventana de la aplicación como única interfaz. Nébula es
+  ficha, su carátula y sus horas, con una ventana nativa de Windows como única interfaz. Playnite
+  está escrito en C# y ese es también el camino de Nébula: la ventana ya es un programa nativo. Nébula es
   una versión propia en español, pensada para juegos que ya tienes instalados en carpetas tuyas
   (sin integraciones de tiendas), y no tendría sentido sin ese precedente. Todo el mérito de la
   idea y de su manera de enseñar la biblioteca es de sus autores y colaboradores.

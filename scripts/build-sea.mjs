@@ -23,6 +23,10 @@ import { leerSubsistema, quitarConsolaDelEjecutable, describirSubsistema, SUBSIS
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SENTINEL = 'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2';
+/* ventana nativa (C#): el programa que ve el usuario. El nucleo de Node es el
+   motor que sirve la biblioteca; la ventana solo lo arranca, lo vigila y dibuja
+   la interfaz con WebView2. */
+const PROYECTO_VENTANA = path.join(ROOT, 'nativo', 'Nebula.Ventana', 'Nebula.Ventana.csproj');
 const VERSION_PAQUETE = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
 
 function arg(name, fallback = null) {
@@ -73,6 +77,80 @@ function comprobarSalida(archivo, blob, log = write) {
     log(`sin consola: ${describirSubsistema(subsistema)}`);
   }
   return true;
+}
+
+/**
+ * Comprueba que la ventana nativa salió como programa de ventana (sin consola).
+ * Se lee la marca del propio ejecutable: si el compilador la dejara como consola,
+ * aparecería la ventana negra otra vez.
+ */
+function comprobarVentana(archivo, log = write) {
+  const subsistema = leerSubsistema(fs.readFileSync(archivo));
+  if (subsistema !== SUBSISTEMA_VENTANA) {
+    throw new Error(`la ventana nativa quedó como programa de consola (${subsistema})`);
+  }
+  log(`ventana nativa sin consola: ${describirSubsistema(subsistema)}`);
+  return true;
+}
+
+/** ¿Hay compilador de .NET disponible en este equipo? */
+export function hayDotnet() {
+  try {
+    execFileSync('dotnet', ['--version'], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Compila la ventana nativa (C#) y devuelve la carpeta con el resultado, o null
+ * si en este equipo no se puede (sin .NET o sin Windows). Que no se pueda no
+ * rompe la compilación: en ese caso queda solo el núcleo, que ya se abre en su
+ * ventana propia como hasta ahora.
+ */
+export async function construirVentana({ log = write, forzar = false } = {}) {
+  if (!forzar && process.platform !== 'win32') {
+    log('aviso: la ventana nativa solo se compila en Windows; se sigue sin ella');
+    return null;
+  }
+  if (!hayDotnet()) {
+    log('aviso: no hay .NET instalado; se compila solo el nucleo (ventana de siempre)');
+    return null;
+  }
+  const salida = path.join(ROOT, 'dist', 'ventana');
+  fs.rmSync(salida, { recursive: true, force: true });
+  log('compilando la ventana nativa (C#)...');
+  execFileSync('dotnet', [
+    'build', PROYECTO_VENTANA,
+    '-c', 'Release',
+    '--nologo',
+    '-v', 'minimal',
+    `-p:Version=${VERSION_PAQUETE}`,
+    '-o', salida,
+  ], { stdio: 'inherit', cwd: ROOT });
+
+  /* el cargador de WebView2 puede venir en una subcarpeta de plataforma: se sube
+     junto al ejecutable para que la carpeta sea autosuficiente */
+  const cargador = path.join(salida, 'runtimes', 'win-x64', 'native', 'WebView2Loader.dll');
+  if (fs.existsSync(cargador) && !fs.existsSync(path.join(salida, 'WebView2Loader.dll'))) {
+    fs.copyFileSync(cargador, path.join(salida, 'WebView2Loader.dll'));
+  }
+  const exe = path.join(salida, 'Nebula.exe');
+  if (!fs.existsSync(exe)) throw new Error('la compilación de la ventana nativa no produjo Nebula.exe');
+  comprobarVentana(exe, log);
+  return salida;
+}
+
+/** Recursos que se incrustan en el instalador para poder copiar la ventana. */
+export function assetsVentana(dirVentana) {
+  const mapa = {};
+  if (!dirVentana || !fs.existsSync(dirVentana)) return mapa;
+  for (const item of fs.readdirSync(dirVentana, { withFileTypes: true })) {
+    if (!item.isFile()) continue;
+    mapa[`ventana/${item.name}`] = path.join(dirVentana, item.name);
+  }
+  return mapa;
 }
 
 /* los dos sabores del ejecutable: solo el programa, o instalable */
@@ -202,7 +280,36 @@ if (isMain) {
     : definicion.nombre.replace(/\.exe$/, '').toLowerCase();
   const out = path.resolve(arg('out', path.join(ROOT, 'dist', porDefecto)));
   try {
-    const result = await buildSea({ runtime, out, modo });
+    /* 1. la ventana nativa (C#), si este equipo puede compilarla */
+    const dirVentana = await construirVentana({ log: write, forzar: arg('ventana', '') === 'forzar' });
+
+    /* 2. el nucleo: el motor de siempre, con la biblioteca dentro */
+    const nucleoOut = modo === 'portable' && dirVentana
+      ? path.join(ROOT, 'dist', 'Nebula-nucleo.exe')
+      : out;
+    const result = await buildSea({
+      runtime,
+      out: nucleoOut,
+      modo,
+      assets: modo === 'instalador' ? assetsVentana(dirVentana) : {},
+    });
+
+    /* 3. reparto: el programa que se abre es la ventana; el nucleo va al lado */
+    if (modo === 'portable' && dirVentana) {
+      const carpeta = path.join(ROOT, 'dist', 'Nebula');
+      fs.mkdirSync(carpeta, { recursive: true });
+      for (const [clave, origen] of Object.entries(assetsVentana(dirVentana))) {
+        const nombre = clave.replace('ventana/', '');
+        fs.copyFileSync(origen, path.join(carpeta, nombre));
+      }
+      fs.copyFileSync(nucleoOut, path.join(carpeta, 'Nebula-nucleo.exe'));
+      fs.copyFileSync(path.join(dirVentana, 'Nebula.exe'), out);
+      /* y el núcleo también en la raíz de dist, para poder probarlo suelto */
+      write(`carpeta lista: ${path.relative(ROOT, carpeta)} (ventana + nucleo + LEEME)`);
+      write(`programa: ${path.basename(out)} abre su ventana; motor: ${path.basename(nucleoOut)}`);
+    } else if (dirVentana) {
+      write(`ventana incrustada en el instalador (${Object.keys(assetsVentana(dirVentana)).length} archivos)`);
+    }
     process.stdout.write(`
   Ejecutable único: ${result}
   Doble clic para abrir la biblioteca, o desde la terminal:

@@ -1,4 +1,4 @@
-NEBULA 1.3.0 - instrucciones rapidas
+NEBULA 1.4.0 - instrucciones rapidas
 ====================================
 
 DOS FORMAS DE USARLO
@@ -13,28 +13,32 @@ A) INSTALADOR (recomendado)
    - Al terminar te pregunta si quieres abrirlo.
 
 B) PORTABLE (sin instalar)
-   Descomprime el ZIP y abre Nebula.exe desde donde lo tengas.
+   Descomprime el ZIP ENTERO y abre Nebula.exe desde donde lo tengas.
+   Son dos archivos y van juntos: Nebula.exe (la ventana del programa) y
+   Nebula-nucleo.exe (el motor). Si mueves el programa, mueve los dos.
 
-SE ABRE COMO UN PROGRAMA, NO COMO UNA PAGINA WEB
-------------------------------------------------
-Nebula ES un programa de Windows: al abrirlo aparece su propia ventana, con el
-icono en la barra de tareas y sin barra de direcciones ni pestanas. No hay
-ventana de consola, ni procesos sueltos de Node, ni nada que se quede corriendo
-por detras: cuando cierras la ventana, el programa termina.
+SE ABRE COMO UN PROGRAMA DE WINDOWS, DE VERDAD
+---------------------------------------------
+Nebula.exe es una aplicacion de Windows escrita en C#: una ventana normal, con
+su icono en la barra de tareas, su boton de cerrar y ninguna barra de
+direcciones. No es una pagina web abierta en un navegador.
 
-En la carpeta de instalacion solo esta Nebula.exe. No hay lanzadores .bat ni
-.vbs de por medio, y no hace falta tener Node instalado.
+  - No aparece NINGUNA ventana de consola: ni al abrirlo, ni un parpadeo.
+  - No queda NADA corriendo por detras: cuando cierras la ventana, el programa
+    termina. (Si tienes un juego en marcha, se sigue midiendo el tiempo hasta
+    que lo cierres, y entonces termina solo.)
+  - Dentro, el motor (Nebula-nucleo.exe) hace el trabajo de siempre, asi que
+    todo lo que tenias sigue igual.
 
-La ventana usa el navegador que ya tienes (Chrome o Edge) en "modo aplicacion",
-que es la forma de tener ventana nativa sin instalar nada mas. Si no hay ningun
-navegador compatible, abre la interfaz en el navegador de siempre y lo avisa.
+La ventana se dibuja con WebView2, el componente que ya trae Microsoft Edge en
+Windows 10 y 11: no hay que instalar nada. Si en algun equipo no estuviera,
+Nebula lo detecta y abre la biblioteca en el navegador de siempre, avisando.
 
-Si prefieres verlo en el navegador normal:
+Si prefieres verlo en el navegador normal (o abrirlo desde el movil en tu red):
 
     Nebula.exe --browser
 
-La direccion sigue siendo http://localhost:4337, por si quieres abrir la
-biblioteca tambien desde el celular en tu red.
+La direccion sigue siendo http://localhost:4337.
 
 DONDE SE GUARDAN TUS DATOS
 --------------------------
@@ -42,12 +46,14 @@ En tu carpeta de usuario, no junto al programa:
 
     %APPDATA%\Nebula
 
-Ahi estan la biblioteca (biblioteca.json), las caratulas descargadas y el
-registro de lo que hace el programa (Nebula.log). Puedes mover el programa o
-reinstalarlo sin perder nada, y hacer copia de seguridad copiando esa carpeta.
+Ahi estan la biblioteca (biblioteca.json), las caratulas descargadas y los
+registros de lo que hace el programa (Nebula.log y Nebula-ventana.log). Puedes
+mover el programa o reinstalarlo sin perder nada, y hacer copia de seguridad
+copiando esa carpeta.
 
-Si algo va mal, abre Nebula.log con el Bloc de notas: ahi se ve paso a paso que
-paso (escaneos, fichas, caratulas y errores concretos).
+Si algo va mal, abre esos dos archivos con el Bloc de notas: ahi se ve paso a
+paso que paso (arranque de la ventana, escaneos, fichas, caratulas y el motivo
+concreto de cada error).
 
 TUS CARPETAS SE QUEDAN GUARDADAS
 --------------------------------
@@ -110,10 +116,19 @@ Si aparece el aviso azul "Windows protegio tu PC", pulsa "Mas informacion" y
 luego "Ejecutar de todas formas". Sale porque el programa no esta firmado con un
 certificado de pago; no es un virus.
 
+EN QUE ESTA HECHO
+-----------------
+La ventana es un programa de Windows en C# (Windows Forms) que dibuja la
+interfaz con WebView2 y arranca el motor que va a su lado. El motor es el mismo
+de las versiones anteriores (Node empaquetado en un solo archivo). Esa mezcla es
+a proposito: la ventana ya es nativa y el motor se puede ir pasando a C# por
+partes mas adelante, sin que tu tengas que cambiar nada mientras tanto.
+
 DE DONDE VIENE LA IDEA
 ----------------------
 Nebula sigue la idea de Playnite (https://playnite.link), el gestor de
 biblioteca de juegos libre para Windows: una sola lista con todos tus juegos,
 con su ficha, su caratula y sus horas. Nebula es una version propia, en espanol
-y pensada para juegos instalados en carpetas tuyas, no para tiendas. Todo el
-merito de la idea original es de sus autores.
+y pensada para juegos instalados en carpetas tuyas, no para tiendas. Playnite
+tambien es un programa nativo de Windows, y ese es el camino que sigue Nebula.
+Todo el merito de la idea original es de sus autores.
